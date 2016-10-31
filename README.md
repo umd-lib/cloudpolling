@@ -7,7 +7,7 @@ A umd-libraries project to poll events from multiple cloud storage sites and syn
 
 **USAGE:**
 
-\nmvn exec:java -Dexec.args="ARGUMENTS"
+*mvn exec:java -Dexec.args="ARGUMENTS"*
 
 **ARGUMENT OPTIONS:**
 
