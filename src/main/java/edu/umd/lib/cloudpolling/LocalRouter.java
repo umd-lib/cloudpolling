@@ -1,7 +1,5 @@
 package edu.umd.lib.cloudpolling;
 
-import java.util.HashMap;
-
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.Predicate;
 import org.apache.camel.ProducerTemplate;
@@ -19,10 +17,8 @@ public class LocalRouter extends RouteBuilder {
    *
    */
 
-  public static PollingProject PROJECT;
-  public static HashMap<Integer, CloudAccount> ACCOUNTS;
-  // List<CloudConnector> CONNECTIONS;
-  public static ProducerTemplate PRODUCER;
+  public PollingProject PROJECT;
+  public ProducerTemplate PRODUCER;
 
   // Predicates for determining nature of requests in MasterQueue
   Predicate download = header("action").isEqualTo("download");
@@ -32,10 +28,8 @@ public class LocalRouter extends RouteBuilder {
 
   public LocalRouter(PollingProject project, ProducerTemplate producer) {
 
-    PRODUCER = producer;
-    PROJECT = project;
-    ACCOUNTS = project.getAllAccounts();
-
+    this.PRODUCER = producer;
+    this.PROJECT = project;
   }
 
   @Override
@@ -46,16 +40,16 @@ public class LocalRouter extends RouteBuilder {
      * requests to master queue
      */
 
-    for (int id : ACCOUNTS.keySet()) {
+    for (int id : this.PROJECT.getAccountIds()) {
 
-      CloudAccount account = ACCOUNTS.get(id);
+      CloudAccount account = new CloudAccount(id, PROJECT.getAccountsDirName());
 
       switch (account.getType()) {
 
       case BOX:
         BoxConnector boxconnector = new BoxConnector(account.getConfiguration());
         boxconnector.setPollToken(account.getPollToken());
-        boxconnector.setProducer(PRODUCER);
+        boxconnector.setProducer(this.PRODUCER);
         from("timer://foo?period=5000&repeatCount=1").bean(boxconnector, "sendPollRequest");
         break;
 
@@ -76,6 +70,7 @@ public class LocalRouter extends RouteBuilder {
     from("direct:actions")
         .routeId("ActionListener")
         .log("Received a request from cloud poll processing.")
+        .process(new UpdateAccount())
         .choice()
         .when(PredicateBuilder.and(download, box))
         .to("direct:download.box.filesys")
@@ -89,7 +84,7 @@ public class LocalRouter extends RouteBuilder {
         .routeId("BoxDownloader")
         .log("Downloading a file from a box account.")
         .setHeader("destination", constant(PROJECT.getSyncFolder()))
-        .process(new BoxDownloadProcessor(ACCOUNTS));
+        .process(new BoxDownloadProcessor());
 
     /**
      * Handle new Box upload by connecting to box API & downloading file.

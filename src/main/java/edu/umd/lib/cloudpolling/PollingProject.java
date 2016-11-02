@@ -2,7 +2,9 @@ package edu.umd.lib.cloudpolling;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -13,23 +15,20 @@ import java.util.Properties;
 
 import edu.umd.lib.cloudpolling.CloudAccount.AccountType;
 
-public class PollingProject implements java.io.Serializable {
+public class PollingProject {
 
   /**
    * Class that hold all configuration information for a polling project and its
    * associated accounts
    */
 
-  private static final long serialVersionUID = -5188789241527583188L;
   public static final String CONFIG_TEMPLATE_NAME = "resources/templates/project.properties";
 
   public String name; // name of project
   public Properties config; // configuration of project
-  public String projectFolderName; // folder of project's config files
-  public String acctsFolderName; // folder of project's accounts' config files
-  public HashMap<Integer, CloudAccount> accounts; // accounts that belong to
-                                                  // this project
-  // public List<CloudAccount> accounts;
+  public File configFile; // file that holds project's user-defined configuration info
+  public File projectDir; // folder of project's config files
+  public File accountsDir; // folder of project's accounts' config files
 
   public PollingProject(String projectName, String configDir) {
     /**
@@ -40,99 +39,104 @@ public class PollingProject implements java.io.Serializable {
     this.config = new Properties();
 
     Path projectPath = Paths.get(configDir, this.name);
-    this.projectFolderName = projectPath.toString();
+    String projectDirName = projectPath.toString();
+    this.projectDir = new File(projectDirName);
+
+    Path configPath = Paths.get(projectDirName, name + ".properties");
+    String configFileName = configPath.toString();
+    this.configFile = new File(configFileName);
 
     Path accountsPath = Paths.get(projectPath.toString(), "accts");
-    this.acctsFolderName = accountsPath.toString();
+    String accountsDirName = accountsPath.toString();
+    this.accountsDir = new File(accountsDirName);
 
-    // this.accounts = new ArrayList<CloudAccount>();
-    this.accounts = new HashMap<Integer, CloudAccount>();
   }
 
-  public boolean setProperties() {
+  public boolean configsSet() {
     /**
-     * Reads configuration files & sets 'config' field
+     * Returns True if configuration is set correctly for this project
      */
 
-    boolean propertiesDefined = false;
-
-    // Create project configuration directory
-    File projectDir = new File(this.projectFolderName);
-    if (!projectDir.exists()) {
-      projectDir.mkdir();
-    }
-
-    // Create project's accounts configuration directory
-    File acctsDir = new File(this.acctsFolderName);
-    if (!acctsDir.exists()) {
-      acctsDir.mkdir();
-    }
-
-    // Define path for project configuration file
-    Path configPath = Paths.get(this.projectFolderName, name + ".properties");
-    String configFilename = configPath.toString();
-    File configFile = new File(configFilename);
+    boolean fieldsValid = false;
+    boolean configFileExists = false;
 
     try {
-      if (configFile.createNewFile()) {
-        // If file does NOT exist, create it, copy template to it, but return
-        // false (properties not defined for this account)
-        File template = new File(CONFIG_TEMPLATE_NAME);
-        InputStream inputStream = new FileInputStream(template);
-        Properties temp = new Properties();
-        temp.load(inputStream);
+      if (this.configFile.exists()) {
 
-        FileOutputStream outputStream = new FileOutputStream(configFile);
-        temp.store(outputStream, "Properties for polling project " + name);
-        outputStream.close();
+        configFileExists = true;
 
-        System.out.println("File is created: " + configFilename + ". \nPlease fill out and rerun 'new' command.");
-
-      } else {
-
-        // If file exists, read properties
-        InputStream inputStream = new FileInputStream(configFile);
-        this.config.load(inputStream);
-
-        // check that property fields are valid
-        propertiesDefined = checkProperties(this.config);
-
+        InputStream inStream = new FileInputStream(this.configFile);
+        this.config.load(inStream);
+        fieldsValid = checkProjectProperties(this.config);
       }
     } catch (IOException e) {
       e.printStackTrace();
     }
 
-    return propertiesDefined;
+    return configFileExists && fieldsValid;
+
+  }
+
+  public void setConfiguration() {
+    /**
+     * Sets config fields from configFile, building configuration file structure if necessary
+     */
+
+    if (!configsSet()) {
+
+      // Create project configuration directory if it doesn't exist
+      if (!this.projectDir.exists()) {
+        this.projectDir.mkdir();
+      }
+
+      // Create project's accounts configuration directory if it doesn't exist
+      if (!accountsDir.exists()) {
+        accountsDir.mkdir();
+      }
+
+      // Create configuration file is it doesn't exist & copy template to it
+      try {
+        if (this.configFile.createNewFile()) {
+          File template = new File(CONFIG_TEMPLATE_NAME);
+          InputStream inStream = new FileInputStream(template);
+          Properties temp = new Properties();
+          temp.load(inStream);
+
+          FileOutputStream outStream = new FileOutputStream(this.configFile);
+          temp.store(outStream, "Properties for polling project " + name);
+          outStream.close();
+
+          System.out.println("Project configuration file has been created with a template: " + this.configFile.getName()
+              + ". \nPlease fill out.");
+
+        }
+      } catch (FileNotFoundException e) {
+        e.printStackTrace();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    } else {
+      System.out.println("Configuration for project " + this.name + " has been set and validated.");
+    }
 
   }
 
   public void addAccount(AccountType accountType) {
     /**
-     * Creates a new cloud account and adds that account to this project's
-     * accounts field. If account configuration cannot be resolved, it does NOT
-     * add the account to accounts.
+     * Creates a new CloudAccount configuration file within accountsDir.  
      */
+    
+    // Define ID for new account
+    List<int> ids = getAccountIds();
+    int newID = Collections.max(ids) + 1;
 
-    // define ID number for new account
-    int newID;
-    if (this.accounts.isEmpty()) {
-      newID = 1;
-    } else {
-      newID = Collections.max(accounts.keySet()) + 1;
-    }
-
-    // create new cloud account object & add to accounts field
-    CloudAccount newAccount = new CloudAccount(newID, accountType);
-    boolean addThisAccount = newAccount.setProperties(this.acctsFolderName);
-    if (addThisAccount) {
-      this.accounts.put(newID, newAccount);
-      System.out.println("New " + accountType.toString() + " account added to project " + this.name + " with ID: "
-          + Integer.toString(newAccount.getID()));
-    }
+    // Create new cloud account object & set its configuration
+    CloudAccount account = new CloudAccount(newID, accountType, this.acctsFolderName);
+    account.setConfiguration();
 
   }
 
-  private Boolean checkProperties(Properties props) {
+  private Boolean checkProjectProperties(Properties props) {
     /**
      * Confirms if fields in props file are valid for a project.
      */
@@ -148,16 +152,38 @@ public class PollingProject implements java.io.Serializable {
     return fieldsOK;
   }
 
-  public HashMap<Integer, CloudAccount> getAllAccounts() {
-    return this.accounts;
-  }
-
   public String getName() {
     return this.name;
   }
+  
+  public List<Integer> getAccountIds() {
+    /**
+     * Gets all account id's from accountsDir
+     */
+    
+    ArrayList<Integer>ids = new ArrayList<Integer>();
+    String filename = null;
+    
+    File[] files = this.accountsDir.listFiles();
+    
+    for (File file : files){
+      
+      filename = file.getName();
 
+      if (filename.endsWith(".properties")){
+        ids.add(Integer.parseInt(filename.split(".")[0].split("acct")[1]));
+      }
+    }
+
+    return ids;
+  }
+  
   public String getSyncFolder() {
     return this.config.getProperty("syncFolder");
+  }
+  
+  publicString getAccountsDirName() {
+    return this.accountsDir.getName();
   }
 
 }

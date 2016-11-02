@@ -1,13 +1,5 @@
 package edu.umd.lib.cloudpolling;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 
@@ -23,13 +15,11 @@ public class CloudPollingApp {
    *
    */
 
-  private static String CONFIGDIR = null;
-
-  public enum Command {
+  public static enum Command {
     NEW, ADD, POLL
   }
 
-  private static class CommandSet {
+  public static class CommandSet {
     public Command COMMAND;
     public String PROJECTNAME;
     public AccountType ACCT_TYPE;
@@ -42,8 +32,8 @@ public class CloudPollingApp {
      */
 
     // get parameters
-    CommandSet thisSet = parseArguments(args);
-    CONFIGDIR = System.getenv().get("CPOLL_CONFIGS");
+    CommandSet COMMANDS = parseArguments(args);
+    String CONFIGDIR = System.getenv().get("CPOLL_CONFIGS");
 
     if (CONFIGDIR == null) {
       System.out.println("ERROR: Please set your $CPOLL_CONFIGS environment variable.");
@@ -51,124 +41,101 @@ public class CloudPollingApp {
     }
 
     // perform actions based on parameters
-    switch (thisSet.COMMAND) {
+    switch (COMMANDS.COMMAND) {
 
     case NEW:
 
-      createNewPollingProject(thisSet.PROJECTNAME, CONFIGDIR);
+      createNewPollingProject(COMMANDS.PROJECTNAME, CONFIGDIR);
       break;
 
     case ADD:
 
-      addAccountToPollingProject(thisSet.PROJECTNAME, thisSet.ACCT_TYPE);
+      addAccountToPollingProject(COMMANDS.PROJECTNAME, CONFIGDIR, COMMANDS.ACCT_TYPE);
       break;
 
     case POLL:
 
-      pollPollingProject(thisSet.PROJECTNAME);
+      pollPollingProject(COMMANDS.PROJECTNAME, CONFIGDIR);
       break;
 
     }
 
   }
 
-  private static void createNewPollingProject(String projectname, String topdir) {
+  public static void createNewPollingProject(String projectName, String topConfigDir) {
     /**
-     * Sets up a new polling project with 0 accounts, then serializes project
-     * object for future use.
+     * Sets up a new polling project with 0 accounts.
      */
 
-    PollingProject project = new PollingProject(projectname, topdir);
-    Boolean projectComplete = project.setProperties();
-    if (projectComplete) {
-      System.out.println("New project successfully created: " + projectname);
-      serializeProject(project);
-    }
+    PollingProject project = loadProject(projectName, topConfigDir);
 
+    if (project != null) {
+      System.out.println("New project successfully created: " + projectName);
+    }
   }
 
-  private static void addAccountToPollingProject(String projectname, AccountType accttype) {
+  public static void addAccountToPollingProject(String projectName, String topConfigDir, AccountType accountType) {
     /**
      * Adds a CloudAccount to an existing PollingProject object.
      */
 
-    PollingProject project = loadProject(projectname);
-    project.addAccount(accttype);
-    serializeProject(project);
+    PollingProject project = loadProject(projectName, topConfigDir);
 
-  }
-
-  private static void pollPollingProject(String projectname) throws Exception {
-    /**
-     * Starts CamelContext with local routing for a PollingProject
-     */
-
-    PollingProject project = loadProject(projectname);
-
-    CamelContext context = new DefaultCamelContext();
-    LocalRouter localRoutes = new LocalRouter(project, context.createProducerTemplate());
-    context.addRoutes(localRoutes);
-
-    context.start();
-    Thread.sleep(1000 * 60 * 15); // 15 min
-    context.stop();
-
-  }
-
-  private static void serializeProject(PollingProject project) {
-    /**
-     * Serializes & saves a PollingProject object.
-     */
-
-    try {
-      String filename = getProjectSerial(project.getName());
-      FileOutputStream fileOutputStream = new FileOutputStream(filename);
-      ObjectOutputStream out = new ObjectOutputStream(fileOutputStream);
-      out.reset();
-      out.writeObject(project);
-      out.close();
-      fileOutputStream.close();
-      System.out.printf("Serialized data is saved in " + filename);
-
-    } catch (IOException i) {
-      i.printStackTrace();
+    if (project == null) {
+      System.out.println("ERROR: Please check configuration setup for project: " + projectName);
+      System.exit(1);
+    } else {
+      System.out.println("Project found: " + projectName);
+      project.addAccount(accountType);
     }
 
   }
 
-  private static PollingProject loadProject(String projectname) {
+  public static void pollPollingProject(String projectName, String topConfigDir) throws Exception {
     /**
-     * Loads a serialized PollingProject object.
+     * Starts CamelContext with local routing for a PollingProject
      */
 
-    PollingProject project = null;
+    PollingProject project = loadProject(projectName, topConfigDir);
 
-    try {
-      ObjectInputStream in = new ObjectInputStream(new FileInputStream(getProjectSerial(projectname)));
-      project = (PollingProject) in.readObject();
-      in.close();
+    if (project != null) {
 
-    } catch (Exception e) {
-      e.printStackTrace();
+      System.out.println("Project found: " + projectName);
+
+      CamelContext context = new DefaultCamelContext();
+      LocalRouter localRoutes = new LocalRouter(project, context.createProducerTemplate());
+      context.addRoutes(localRoutes);
+
+      context.start();
+      Thread.sleep(1000 * 60 * 15); // 15 min
+      context.stop();
+
+    } else {
+      System.out.println("ERROR: Please check configuration setup for project: " + projectName);
+      System.exit(1);
+    }
+
+  }
+
+  public static PollingProject loadProject(String projectName, String topConfigDir) {
+    /**
+     * Creates a PollingProject object if its configuration file is valid
+     */
+
+    PollingProject project = new PollingProject(projectName, topConfigDir);
+    boolean projectValid = project.setProperties();
+
+    if (!projectValid) {
+      project = null;
     }
 
     return project;
 
   }
 
-  private static String getProjectSerial(String projectName) {
+  public static CommandSet parseArguments(String[] args) {
     /**
-     * Serialized PollingProject is located in project's configuration folder
-     */
-    Path projectPath = Paths.get(CONFIGDIR, projectName, projectName + ".ser");
-    String projectSerialName = projectPath.toString();
-
-    return projectSerialName;
-  }
-
-  private static CommandSet parseArguments(String[] args) {
-    /**
-     * Parses command line arguments to an Arg class
+     * Parses command line arguments to a CommandSet object
      */
 
     String USAGE = "\n new <projectname> : creates a new polling project"

@@ -3,7 +3,6 @@ package edu.umd.lib.cloudpolling;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Paths;
-import java.util.HashMap;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -18,11 +17,11 @@ public class BoxDownloadProcessor implements Processor {
    *
    */
 
-  private static HashMap<Integer, CloudAccount> allAccounts;
+  private static PollingProject thisProject;
   private static CloudAccount thisAccount;
 
-  public BoxDownloadProcessor(HashMap<Integer, CloudAccount> accounts) {
-    allAccounts = accounts;
+  public BoxDownloadProcessor(PollingProject project) {
+    thisProject = project;
   }
 
   public void process(Exchange exchange) throws Exception {
@@ -30,7 +29,7 @@ public class BoxDownloadProcessor implements Processor {
     // get BoxConnector object
     int accountID = exchange.getIn().getHeader("account_id", Integer.class);
     String sourceID = exchange.getIn().getHeader("source_id", String.class);
-    thisAccount = allAccounts.get(accountID);
+    thisAccount = new CloudAccount(accountID, project.getAccountsDirName());
     allAccounts = null;
 
     // connect & get file to download from Box

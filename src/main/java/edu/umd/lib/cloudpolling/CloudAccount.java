@@ -1,4 +1,4 @@
-package edu.umd.lib.cloudpolling;
+package src.main.java.edu.umd.lib.cloudpolling;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -10,7 +10,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Properties;
 
-public class CloudAccount implements java.io.Serializable {
+public class CloudAccount {
 
   /**
    * Class that holds configuration (includes authentication info for an API
@@ -21,8 +21,6 @@ public class CloudAccount implements java.io.Serializable {
   public static enum AccountType {
     BOX, DROPBOX, GOOGLEDRIVE
   }
-
-  private static final long serialVersionUID = -6137244347382437093L;
 
   // TODO: add dropbox & google drive config templates
   public static HashMap<AccountType, File> templates;
@@ -36,70 +34,106 @@ public class CloudAccount implements java.io.Serializable {
   }
 
   public int id; // ID of this account (auto-generated)
+  public File configFile;
   public AccountType type; // type of this account
   public File configTemplate; // template file account configuration
   public Properties config; // configuration fields for this account
-  public String pollToken; // last polling position
 
-  public CloudAccount(int newID, AccountType acctType) {
+  public CloudAccount(int ID, AccountType accountType, String configDir) {
     /**
-     * Initialize instance variables
+     * Constructor for creating new CloudAccount of type accountType
      */
 
-    this.id = newID;
-    this.type = acctType;
+    this.id = ID;
+    this.type = accountType;
     this.config = new Properties();
     this.configTemplate = templates.get(this.type);
-    this.pollToken = null;
-  }
-
-  public boolean setProperties(String topDir) {
-    /**
-     * Reads or creates configuration file for the account. Returns True if
-     * properties fields can be read and are valid. Returns False if file exists
-     * or has been created, but properties fields are not yet valid
-     */
-
-    boolean propertiesDefined = false;
 
     // Define path of account configuration file
-    Path configPath = Paths.get(topDir, "acct" + Integer.toString(id) + ".properties");
+    Path configPath = Paths.get(configDir, "acct" + Integer.toString(this.id) + ".properties");
     String configFilename = configPath.toString();
-    File configFile = new File(configFilename);
+    this.configFile = new File(configFilename);
+  }
+
+  public CloudAccount(int ID, String configDir) {
+    /**
+     * Constructor for existing CloudAcount with id ID under configDir
+     */
+    this.id = ID;
+    this.config = new Properties();
+    this.configTemplate = templates.get(this.type);
+
+    // Define path of account configuration file
+    Path configPath = Paths.get(configDir, "acct" + Integer.toString(this.id) + ".properties");
+    String configFilename = configPath.toString();
+    this.configFile = new File(configFilename);
+
+    // set account type
+    boolean accountFound = setProperties();
+    if (accountFound) {
+      this.type = AccountType.valueOf(this.config.getProperty("configType"));
+    }
+
+  }
+  
+  public boolean configsSet() {
+    /**
+     * Returns True if configuration is set correctly for this account
+     */
+
+    boolean fieldsValid = false;
+    boolean configFileExists = false;
 
     try {
-      if (configFile.createNewFile()) {
-        // If file does NOT exist, create it, copy template to it, but return
-        // false (properties not defined for this account)
+      if (this.configFile.exists()) {
 
-        Properties temp = new Properties();
-        InputStream inputStream = new FileInputStream(this.configTemplate);
-        temp.load(inputStream);
-        temp.put("configID", Integer.toString(this.id));
+        configFileExists = true;
 
-        FileOutputStream fileOut = new FileOutputStream(configFile);
-        temp.store(fileOut, "Properties for box connection account " + Integer.toString(id));
-        fileOut.close();
-
-        System.out.println("File is created: " + configFilename + ". \nPlease fill out and rerun 'add' command.");
-
-      } else {
-
-        // If file exists, read properties
-        InputStream inputStream = new FileInputStream(configFile);
-        this.config.load(inputStream);
-
-        // save config field & check that property fields are valid.
-        propertiesDefined = checkProperties(this.config);
+        InputStream inStream = new FileInputStream(this.configFile);
+        this.config.load(inStream);
+        fieldsValid = checkAccountProperties(this.config);
       }
     } catch (IOException e) {
       e.printStackTrace();
     }
 
-    return propertiesDefined;
+    return configFileExists && fieldsValid;
+
+  }
+  
+  public void setConfiguration() {
+    /**
+     * Sets config field from configFile
+     */
+
+    if (!configsSet()) {
+
+      // Create configuration file is it doesn't exist & copy template to it
+      try {
+        if (this.configFile.createNewFile()) {
+          InputStream inStream = new FileInputStream(this.configTemplate);
+          Properties temp = new Properties();
+          temp.load(inStream);
+
+          FileOutputStream outStream = new FileOutputStream(this.configFile);
+          temp.store(outStream, "Properties for box connection account " + Integer.toString(this.id));
+          outStream.close();
+
+          System.out.println("Account configuration file has been created with a template: " + this.configFile.getName()
+              + ". \nPlease fill out.");
+
+        }
+      } catch (FileNotFoundException e) {
+        e.printStackTrace();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    } else {
+      System.out.println("Configuration for acct" + this.id + " has been set and validated.");
+    }
   }
 
-  private Boolean checkProperties(Properties props) {
+  private boolean checkAccountProperties(Properties props) {
     /**
      * Confirms if fields in props are valid for an account.
      */
@@ -149,7 +183,7 @@ public class CloudAccount implements java.io.Serializable {
   }
 
   public String getPollToken() {
-    return this.pollToken;
+    return this.config.getProperty("pollToken");
   }
 
 }
