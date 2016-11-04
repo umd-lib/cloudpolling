@@ -1,6 +1,4 @@
-package edu.umd.lib.cloudpolling;
-
-import java.util.HashMap;
+package cloudpolling;
 
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.Predicate;
@@ -19,12 +17,11 @@ public class LocalRouter extends RouteBuilder {
    *
    */
 
-  public static PollingProject PROJECT;
-  public static HashMap<Integer, CloudAccount> ACCOUNTS;
-  // List<CloudConnector> CONNECTIONS;
-  public static ProducerTemplate PRODUCER;
+  public PollingProject PROJECT;
+  public ProducerTemplate PRODUCER;
 
   // Predicates for determining nature of requests in MasterQueue
+  Predicate updateToken = header("action").isEqualTo("update_token");
   Predicate download = header("action").isEqualTo("download");
   Predicate box = header("account_type").isEqualTo("box");
   Predicate dropbox = header("account_type").isEqualTo("dropbox");
@@ -32,31 +29,28 @@ public class LocalRouter extends RouteBuilder {
 
   public LocalRouter(PollingProject project, ProducerTemplate producer) {
 
-    PRODUCER = producer;
-    PROJECT = project;
-    ACCOUNTS = project.getAllAccounts();
-
+    this.PRODUCER = producer;
+    this.PROJECT = project;
   }
 
   @Override
   public void configure() throws Exception {
 
     /**
-     * Sends poll requests for each cloud source, parses responses, and sends
-     * requests to master queue
+     * Sends 1 poll request to each cloud source & handles responses by sending
+     * "action" messages to 'direct:actions' queue.
      */
 
-    for (int id : ACCOUNTS.keySet()) {
+    for (int id : this.PROJECT.getAccountIds()) {
 
-      CloudAccount account = ACCOUNTS.get(id);
+      CloudAccount account = new CloudAccount(id, PROJECT);
+      account.setConfiguration();
 
       switch (account.getType()) {
 
       case BOX:
-        BoxConnector boxconnector = new BoxConnector(account.getConfiguration());
-        boxconnector.setPollToken(account.getPollToken());
-        boxconnector.setProducer(PRODUCER);
-        from("timer://foo?period=5000&repeatCount=1").bean(boxconnector, "sendPollRequest");
+        BoxConnector boxconnector = new BoxConnector(account.getConfiguration(), account.getPollToken(), this.PRODUCER);
+        from("timer://foo?repeatCount=1").bean(boxconnector, "sendPollRequest");
         break;
 
       case DROPBOX:
@@ -73,10 +67,12 @@ public class LocalRouter extends RouteBuilder {
     /**
      * Route based on request types from master queue.
      */
-    from("direct:actions")
+    from("direct:actions").streamCaching()
         .routeId("ActionListener")
         .log("Received a request from cloud poll processing.")
         .choice()
+        .when(updateToken)
+        .to("direct:update.token")
         .when(PredicateBuilder.and(download, box))
         .to("direct:download.box.filesys")
         .otherwise()
@@ -88,18 +84,15 @@ public class LocalRouter extends RouteBuilder {
     from("direct:download.box.filesys")
         .routeId("BoxDownloader")
         .log("Downloading a file from a box account.")
-        .setHeader("destination", constant(PROJECT.getSyncFolder()))
-        .process(new BoxDownloadProcessor(ACCOUNTS));
+        .process(new BoxDownloadProcessor(PROJECT));
 
     /**
-     * Handle new Box upload by connecting to box API & downloading file.
+     * Update Poll Token of a CloudAccount
      */
-    from("direct:download.filesys")
-        .routeId("FileDownloader")
-        .log("Downloading uploaded cloud file to local file system.")
-        .transform().simple("${properties:downloadurl}")
-        .to("file:data/outbox"); // TODO: make sure it copies file structure of
-                                 // cloud source
+    from("direct:update.token")
+        .routeId("TokenUpdater")
+        .log("Updating CloudAccount poll token")
+        .process(new UpdateAccountProcessor(PROJECT));
 
     /***
      * Default Route

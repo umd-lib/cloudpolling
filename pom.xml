@@ -1,16 +1,11 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
   <groupId>edu.umd.lib</groupId>
   <artifactId>cloudpolling</artifactId>
   <version>0.0.1-SNAPSHOT</version>
-  <packaging>jar</packaging>
-
   <name>cloudpolling</name>
-  <url>http://maven.apache.org</url>
-
-  <properties>
+  
+   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <camel.version>2.17.0</camel.version>
   </properties>
@@ -67,6 +62,17 @@
       <version>5.6.0</version>
     </dependency>
     
+    <dependency>
+       <groupId>org.slf4j</groupId>
+       <artifactId>slf4j-api</artifactId>
+       <version>1.7.5</version>
+   </dependency>
+   <dependency>
+       <groupId>org.slf4j</groupId>
+       <artifactId>slf4j-log4j12</artifactId>
+       <version>1.7.5</version>
+   </dependency>
+    
   </dependencies>
   
   <build>
@@ -78,7 +84,7 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>1.2.1</version>
         <configuration>
-          <mainClass>edu.umd.lib.cloudpolling.CloudPollingApp</mainClass>
+          <mainClass>cloudpolling.CloudPollingApp</mainClass>
           <includePluginDependencies>false</includePluginDependencies>
         </configuration>
       </plugin>
