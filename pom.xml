@@ -1,9 +1,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>edu.umd.lib</groupId>
-  <artifactId>cloudpolling2</artifactId>
+  <artifactId>cloudpolling</artifactId>
   <version>0.0.1-SNAPSHOT</version>
-  <name>cloudpolling2</name>
+  <name>cloudpolling</name>
   
    <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -84,7 +84,7 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>1.2.1</version>
         <configuration>
-          <mainClass>cloudpolling2.CloudPollingApp</mainClass>
+          <mainClass>cloudpolling.CloudPollingApp</mainClass>
           <includePluginDependencies>false</includePluginDependencies>
         </configuration>
       </plugin>
