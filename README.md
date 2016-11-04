@@ -11,9 +11,9 @@ A umd-libraries project to poll events from multiple cloud storage sites and syn
 
 **ARGUMENT OPTIONS:**
 
-* new <projectname> : creates a new polling project  
-* add <projectname> <acct_type> : adds a cloud account to a project (types: Box, DropBox, Drive)  
-* poll <projectname> : polls all accounts in a project and syncs account folder with local system  
+* new [projectname] : creates a new polling project  
+* add [projectname] [acct_type] : adds a cloud account to a project (types: Box, DropBox, Drive)  
+* poll [projectname] : polls all accounts in a project and syncs account folder with local system  
 
 
 **PROJECT STATUS:**  
