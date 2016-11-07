@@ -49,12 +49,13 @@ public class LocalRouter extends RouteBuilder {
       switch (account.getType()) {
 
       case BOX:
-        BoxConnector boxconnector = new BoxConnector(account.getConfiguration(), account.getPollToken(), this.PRODUCER);
+        BoxConnector boxconnector = new BoxConnector(account, this.PRODUCER);
         from("timer://foo?repeatCount=1").bean(boxconnector, "sendPollRequest");
         break;
 
       case DROPBOX:
-        // TODO: add dropbox
+        DropBoxConnector dbconnector = new DropBoxConnector(account, this.PRODUCER);
+        from("timer://foo?repeatCount=1").bean(dbconnector, "sendPollRequest");
         break;
 
       case GOOGLEDRIVE:
@@ -75,6 +76,8 @@ public class LocalRouter extends RouteBuilder {
         .to("direct:update.token")
         .when(PredicateBuilder.and(download, box))
         .to("direct:download.box.filesys")
+        .when(PredicateBuilder.and(download, dropbox))
+        .to("direct:download.dropbox.filesys")
         .otherwise()
         .to("direct:default");
 
@@ -85,6 +88,14 @@ public class LocalRouter extends RouteBuilder {
         .routeId("BoxDownloader")
         .log("Downloading a file from a box account.")
         .process(new BoxDownloadProcessor(PROJECT));
+
+    /**
+     * Download a DropBox file using DropBox Java SDK
+     */
+    from("direct:download.dropbox.filesys")
+        .routeId("DropBoxDownloader")
+        .log("Downloading a file from a dropbox account.")
+        .process(new DropBoxDownloadProcessor(PROJECT));
 
     /**
      * Update Poll Token of a CloudAccount

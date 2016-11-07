@@ -37,13 +37,13 @@ public class BoxConnector {
 
   private ProducerTemplate PRODUCER;
 
-  public BoxConnector(Properties config, String pollToken, ProducerTemplate producer) {
+  public BoxConnector(CloudAccount account, ProducerTemplate producer) {
     /**
      * Initializes Box connection configuration
      */
 
-    setAuthInfo(config);
-    setStreamPosition(pollToken);
+    setAuthInfo(account.getConfiguration());
+    setStreamPosition(account.getPollToken());
     setProducer(producer);
 
   }

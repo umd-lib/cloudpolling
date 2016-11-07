@@ -29,13 +29,16 @@ public class CloudAccount {
     BOX, DROPBOX, GOOGLEDRIVE
   }
 
-  // TODO: add dropbox & google drive config templates
+  // TODO: add google drive config templates
   public static HashMap<AccountType, File> templates;
   static {
     HashMap<AccountType, File> map = new HashMap<AccountType, File>();
 
     File boxTemplate = new File("src/main/resources/templates/box.properties");
     map.put(AccountType.BOX, boxTemplate);
+
+    File dropBoxTemplate = new File("src/main/resources/templates/dropbox.properties");
+    map.put(AccountType.DROPBOX, dropBoxTemplate);
 
     templates = map;
   }
@@ -155,9 +158,10 @@ public class CloudAccount {
 
     switch (this.TYPE) {
 
+    // TODO: Be more robust with file checking?
+
     case BOX:
       // check if private key file exists
-      // TODO: be more robust here
       String privateKeyFilename = config.getProperty("privateKeyFile");
       File privateKeyFile = new File(privateKeyFilename);
       fieldsOK = privateKeyFile.exists();
@@ -171,7 +175,14 @@ public class CloudAccount {
       break;
 
     case DROPBOX:
-      // TODO: add functionality for dropbox
+
+      for (Object value : config.values()) {
+        if (value.toString() == "FILLHERE") {
+          fieldsOK = false;
+          break;
+        }
+      }
+
       break;
 
     case GOOGLEDRIVE:
