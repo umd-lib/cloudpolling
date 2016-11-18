@@ -236,4 +236,30 @@ public class PollingProject {
     return this.ACCTS_DIR;
   }
 
+  public String getConfigFile() {
+    return this.CONFIG_FILE.toString();
+  }
+
+  public void updateConfiguration(String key, String value) {
+    /**
+     * Edits this account's configuration file
+     */
+
+    Properties config = getConfiguration();
+
+    config.setProperty(key, value);
+
+    FileOutputStream outStream;
+    try {
+      outStream = new FileOutputStream(this.CONFIG_FILE);
+      config.store(outStream, "Properties for polling project " + this.NAME);
+      outStream.close();
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+  }
+
 }

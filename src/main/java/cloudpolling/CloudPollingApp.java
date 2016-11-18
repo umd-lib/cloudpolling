@@ -1,5 +1,9 @@
 package cloudpolling;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 
@@ -16,7 +20,7 @@ public class CloudPollingApp {
    */
 
   public static enum Command {
-    NEW, ADD, POLL
+    NEW, ADD, POLL, RESET
   }
 
   public static class CommandSet {
@@ -58,8 +62,32 @@ public class CloudPollingApp {
       pollPollingProject(COMMANDS.PROJECTNAME, CONFIGDIR);
       break;
 
+    case RESET:
+      resetPollingProject(COMMANDS.PROJECTNAME, CONFIGDIR);
+
     }
 
+  }
+
+  public static void resetPollingProject(String projectName, String topConfigDir) {
+    PollingProject project = loadProject(projectName, topConfigDir);
+
+    if (project == null) {
+      System.out.println("ERROR: Please check configuration setup for project: " + projectName);
+      System.exit(1);
+    } else {
+      System.out.println("Project found: " + projectName);
+
+      project.updateConfiguration("lastPoll", "1900/01/01-00:00:00");
+      System.out.println("Resetting last poll date for project to 1900/01/01-00:00:00");
+
+      ArrayList<Integer> ids = project.getAccountIds();
+      for (Integer id : ids) {
+        CloudAccount acct = new CloudAccount(id, project);
+        acct.updateConfiguration("pollToken", "0");
+        System.out.println("Resetting poll token for acct" + id.toString() + " to 0");
+      }
+    }
   }
 
   public static void createNewPollingProject(String projectName, String topConfigDir) {
@@ -103,12 +131,16 @@ public class CloudPollingApp {
       System.out.println("Project found: " + projectName);
 
       CamelContext context = new DefaultCamelContext();
-      LocalRouter localRoutes = new LocalRouter(project, context.createProducerTemplate());
+      SyncRouter localRoutes = new SyncRouter(project, context.createProducerTemplate());
       context.addRoutes(localRoutes);
 
       context.start();
-      Thread.sleep(1000 * 60 * 5); // 5 min
+      Thread.sleep(1000 * 60 * 2); // 5 min
       context.stop();
+
+      SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss");
+      Date dateobj = new Date();
+      project.updateConfiguration("lastPoll", sdf.format(dateobj));
 
     } else {
       System.out.println("ERROR: Please check configuration setup for project: " + projectName);
