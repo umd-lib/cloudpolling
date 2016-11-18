@@ -63,7 +63,9 @@ public class CloudPollingApp {
       break;
 
     case RESET:
+
       resetPollingProject(COMMANDS.PROJECTNAME, CONFIGDIR);
+      break;
 
     }
 
