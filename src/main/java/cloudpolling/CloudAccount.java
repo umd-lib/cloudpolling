@@ -11,71 +11,118 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Properties;
 
+/**
+ * Represents a cloud storage service account.
+ *
+ * @author tlarrue
+ *
+ */
 public class CloudAccount {
 
-  /**
-   * Class that represents a cloud service account.
-   *
-   * Account Types handled : Box, DropBox (soon), GoogleDrive (soon)
-   */
-
   public int ID;
-  public AccountType TYPE;
-  public PollingProject PARENT;
-  public File CONFIG_FILE;
-  public File CONFIG_TEMPLATE;
+  public Type type;
+  public PollingProject parent;
+  public File configFile;
+  public File configTemplate;
 
-  public static enum AccountType {
+  /**
+   * Enumerates possible types of cloud accounts handled by this application.
+   *
+   * @author tlarrue
+   *
+   */
+  public enum Type {
     BOX, DROPBOX, GOOGLEDRIVE
   }
 
   // TODO: add google drive config templates
-  public static HashMap<AccountType, File> templates;
+  public static HashMap<Type, File> TEMPLATES;
   static {
-    HashMap<AccountType, File> map = new HashMap<AccountType, File>();
+    HashMap<CloudAccount.Type, File> map = new HashMap<CloudAccount.Type, File>();
 
     File boxTemplate = new File("src/main/resources/templates/box.properties");
-    map.put(AccountType.BOX, boxTemplate);
+    map.put(CloudAccount.Type.BOX, boxTemplate);
 
     File dropBoxTemplate = new File("src/main/resources/templates/dropbox.properties");
-    map.put(AccountType.DROPBOX, dropBoxTemplate);
+    map.put(CloudAccount.Type.DROPBOX, dropBoxTemplate);
 
-    templates = map;
+    TEMPLATES = map;
   }
 
-  public CloudAccount(int id, PollingProject parent, AccountType type) {
-    /**
-     * Constructor for a brand new cloud account
-     */
-
+  /**
+   * Constructs a cloud account from its id, parent project, and account type.
+   *
+   * @param id
+   * @param parent
+   * @param type
+   */
+  public CloudAccount(int id, PollingProject parent, CloudAccount.Type type) {
     this.ID = id;
-    this.TYPE = type;
-    this.PARENT = parent;
-    this.CONFIG_FILE = defineConfigFile(id, parent);
-    this.CONFIG_TEMPLATE = templates.get(type);
+    this.type = type;
+    this.parent = parent;
+    this.configFile = defineConfigFile(id, parent);
+    this.configTemplate = TEMPLATES.get(type);
   }
 
+  /**
+   * Constructs a cloud account from its id & parent project assuming the
+   * associated configuration file already exists.
+   *
+   * @param id
+   * @param parent
+   */
   public CloudAccount(int id, PollingProject parent) {
-    /**
-     * Constructor for cloud account that is assumed to already exist
-     */
-
     this.ID = id;
-    this.PARENT = parent;
-    this.CONFIG_FILE = defineConfigFile(id, parent);
+    this.parent = parent;
+    this.configFile = defineConfigFile(id, parent);
   }
 
-  public void setConfiguration() {
-    /**
-     * Creates a configuration file using template if it does not already exist.
-     * If it does exist, it will validate the fields and report if further
-     * action is needed to configure the account.
-     */
+  /**
+   * Gets this cloud account's ID.
+   *
+   * @return the ID of this cloud account.
+   */
+  public int getID() {
+    return ID;
+  }
 
+  /**
+   * Gets this cloud account's parent project.
+   *
+   * @return parent PollingProject object of this cloud account.
+   */
+  public PollingProject getParent() {
+    return parent;
+  }
+
+  /**
+   * Gets the configuration file of this cloud account.
+   *
+   * @return the configuration file of this cloud account.
+   */
+  public File getConfigFile() {
+    return configFile;
+  }
+
+  /**
+   * Gets the configuration file template for this cloud account.
+   *
+   * @return the configuration file template for this cloud account.
+   */
+  private File getConfigTemplate() {
+    return configTemplate;
+  }
+
+  /**
+   * Creates a configuration file using template if it does not already exist.
+   * If it does exist, it will validate the fields and report if further action
+   * is needed to configure the account.
+   */
+  public void setConfiguration() {
     boolean fileCreated = false;
 
     try {
-      fileCreated = CONFIG_FILE.createNewFile();
+      fileCreated = this.getConfigFile().createNewFile();
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -84,46 +131,42 @@ public class CloudAccount {
 
       if (configsValid()) {
 
-        System.out.println("Configuration file for " + this.PARENT.getName() + "/acct" + this.ID
+        System.out.println("Configuration file for " + this.getParent().getName() + "/acct" + this.getID()
             + " already exists and has validated.");
-
         setType();
 
       } else {
 
-        System.out.println("Configuration file for " + this.PARENT.getName() + "/acct" + this.ID
-            + " already exists, but is not valid. Please check fields: " + this.CONFIG_FILE.getAbsolutePath());
-
+        System.out.println("Configuration file for " + this.getParent().getName() + "/acct" + this.getID()
+            + " already exists, but is not valid. Please check fields: " + this.getConfigFile().getAbsolutePath());
       }
 
     } else {
 
-      System.out.println("New file has been created: " + this.CONFIG_FILE.getAbsolutePath());
-
+      System.out.println("New file has been created: " + this.getConfigFile().getAbsolutePath());
       copyTemplateToConfigFile();
     }
   }
 
+  /**
+   * Copies appropriate template to the account's configuration file.
+   */
   public void copyTemplateToConfigFile() {
-    /**
-     * Copies appropriate template to the account's configuration file.
-     */
-
     try {
-      InputStream inStream = new FileInputStream(this.CONFIG_TEMPLATE);
+      InputStream inStream = new FileInputStream(this.getConfigTemplate());
       Properties temp = new Properties();
       temp.load(inStream);
 
-      temp.setProperty("configID", Integer.toString(this.ID));
+      temp.setProperty("configID", Integer.toString(this.getID()));
 
-      FileOutputStream outStream = new FileOutputStream(this.CONFIG_FILE);
+      FileOutputStream outStream = new FileOutputStream(this.getConfigFile());
       temp.store(outStream,
-          "Properties for box connection account " + Integer.toString(this.ID) + " for project "
-              + this.PARENT.getName());
+          "Properties for box connection account " + Integer.toString(this.getID()) + " for project "
+              + this.getParent().getName());
       outStream.close();
 
-      System.out.println("Account configuration template '" + this.CONFIG_TEMPLATE.getName()
-          + "' has been copied to configuration file '" + this.CONFIG_FILE.getAbsolutePath()
+      System.out.println("Account configuration template '" + this.getConfigTemplate().getName()
+          + "' has been copied to configuration file '" + this.getConfigFile().getAbsolutePath()
           + "'. \nPlease fill out.");
 
     } catch (FileNotFoundException e) {
@@ -134,29 +177,34 @@ public class CloudAccount {
 
   }
 
+  /**
+   * Defines the configuration file for this cloud account.
+   *
+   * @param id
+   * @param parent
+   * @return the configuration file for this cloud account.
+   */
   public File defineConfigFile(int id, PollingProject parent) {
-    /**
-     * Returns the Configuration File
-     */
-
-    String configDir = parent.getAcctsDir().getAbsolutePath();
+    String configDir = parent.getAccountsDir().getAbsolutePath();
     Path configPath = Paths.get(configDir, "acct" + Integer.toString(id) + ".properties");
     File file = new File(configPath.toString());
 
     return file;
   }
 
+  /**
+   * Returns true if configuration file is filled out correctly for this cloud
+   * account.
+   *
+   * @return state of this cloud account's configuration file
+   */
   private boolean configsValid() {
-    /**
-     * Confirms if fields in props are valid for an account.
-     */
-
     Properties config = getConfiguration();
     setType();
 
     boolean fieldsOK = true;
 
-    switch (this.TYPE) {
+    switch (this.getType()) {
 
     // TODO: Be more robust with file checking?
 
@@ -194,21 +242,23 @@ public class CloudAccount {
     return fieldsOK;
   }
 
+  /**
+   * Edits given key of this cloud account's configuration file
+   *
+   * @param key
+   * @param value
+   */
   public void updateConfiguration(String key, String value) {
-    /**
-     * Edits this account's configuration file
-     */
-
     Properties config = getConfiguration();
 
     config.setProperty(key, value);
 
     FileOutputStream outStream;
     try {
-      outStream = new FileOutputStream(this.CONFIG_FILE);
+      outStream = new FileOutputStream(this.getConfigFile());
       config.store(outStream,
           "Properties for box connection account " + Integer.toString(this.ID) + " for project "
-              + this.PARENT.getName());
+              + this.getParent().getName());
       outStream.close();
     } catch (FileNotFoundException e) {
       e.printStackTrace();
@@ -217,37 +267,39 @@ public class CloudAccount {
     }
 
     setType();
-
   }
 
+  /**
+   * Reads the given field value from this cloud account's configuration file.
+   *
+   * @param key
+   * @return field value from account's configuration file
+   */
   public String readConfiguration(String key) {
-    /**
-     * Returns the given field value from the configuration file.
-     */
-
     Properties config = getConfiguration();
     return config.getProperty(key);
   }
 
-  public void setType() {
-    /**
-     * Sets TYPE variable from configuration file
-     */
+  /**
+   * Sets type for this cloud account from its configuration file.
+   */
+  private void setType() {
     String type = readConfiguration("configType");
-    this.TYPE = AccountType.valueOf(type.toUpperCase());
-    this.CONFIG_TEMPLATE = templates.get(this.TYPE);
+    this.type = CloudAccount.Type.valueOf(type.toUpperCase());
+    this.configTemplate = TEMPLATES.get(this.getType());
   }
 
+  /**
+   * Gets properties object loaded from this account's configuration file.
+   *
+   * @return properties from this cloud account's configuration file.
+   */
   public Properties getConfiguration() {
-    /**
-     * Returns Properties object loaded from this account's configuration file
-     */
-
     InputStream inStream;
     Properties config = new Properties();
 
     try {
-      inStream = new FileInputStream(this.CONFIG_FILE);
+      inStream = new FileInputStream(this.getConfigFile());
       config.load(inStream);
     } catch (FileNotFoundException e) {
       e.printStackTrace();
@@ -259,25 +311,22 @@ public class CloudAccount {
 
   }
 
+  /**
+   * Gets the pollToken field from this cloud account's configuration file.
+   *
+   * @return current poll token of this cloud account
+   */
   public String getPollToken() {
-    /**
-     * Returns the pollToken field from this account's configuration file
-     */
     return readConfiguration("pollToken");
   }
 
-  public int getID() {
-    /**
-     * Getter for ID
-     */
-    return this.ID;
-  }
-
-  public AccountType getType() {
-    /**
-     * Getter for TYPE
-     */
-    return this.TYPE;
+  /**
+   * Gets account type of this cloud account
+   *
+   * @return account type of this cloud account
+   */
+  public CloudAccount.Type getType() {
+    return type;
   }
 
 }

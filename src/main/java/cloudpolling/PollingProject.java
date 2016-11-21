@@ -6,55 +6,82 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Properties;
 
-import cloudpolling.CloudAccount.AccountType;
-
+/**
+ * Represents a polling project that contains many cloud accounts.
+ *
+ * @author tlarrue
+ */
 public class PollingProject {
-
-  /**
-   * Class that represents a polling project (which is the parents to many cloud
-   * accounts
-   */
 
   public static final String CONFIG_TEMPLATE_NAME = "src/main/resources/templates/project.properties";
 
-  public String NAME;
-  public File CONFIG_FILE;
-  public File PROJECT_DIR;
-  public File ACCTS_DIR;
+  public String name;
+  public File configFile;
+  public File projectDir;
+  public File accountsDir;
 
+  /**
+   * Constructs a PollingProject from a unique name and directory where all
+   * configuration files for cloudpolling projects are stored.
+   *
+   * @param name
+   * @param configDir
+   */
   public PollingProject(String name, String configDir) {
-    /**
-     * Constructor - Initializes instance variables & validates configuration
-     */
-
-    this.NAME = name;
-    this.CONFIG_FILE = defineConfigFile(name, configDir);
-    this.PROJECT_DIR = this.CONFIG_FILE.getParentFile();
-    this.ACCTS_DIR = new File(Paths.get(this.PROJECT_DIR.getAbsolutePath(), "accts").toString());
+    this.name = name;
+    this.configFile = new File(Paths.get(configDir, name, name + ".properties").toString());
+    this.projectDir = getConfigFile().getParentFile();
+    this.accountsDir = new File(Paths.get(getProjectDir().getAbsolutePath(), "accts").toString());
   }
 
-  public File defineConfigFile(String name, String configDir) {
-    /**
-     * Returns the project's configuration file
-     */
+  /**
+   * Creates a configuration file using polling project template if it does not
+   * already exist. If it does exist, validates the fields and report if further
+   * action is needed to configure the account.
+   */
+  public void setConfiguration() {
 
-    Path configPath = Paths.get(configDir, name, name + ".properties");
-    String configFileName = configPath.toString();
-    File configFile = new File(configFileName);
+    // Create project & accounts configuration directory if it doesn't exist
+    if (!this.getAccountsDir().exists()) {
+      this.getAccountsDir().mkdirs();
+    }
 
-    return configFile;
+    // Create project's configuration file it doesn't exist
+    boolean fileCreated = false;
+    try {
+      fileCreated = this.getConfigFile().createNewFile();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    if (!fileCreated) {
+      if (configsValid()) {
+        System.out.println("Configuration file for project '" + this.getName() + "' has been validated.");
+
+      } else {
+        System.out.println("Configuration file for project '" + this.getName()
+            + "' is not valid. Please check fields: " + this.getConfigFile().getAbsolutePath());
+      }
+
+    } else {
+      System.out.println("New file has been created: " + this.getConfigFile().getAbsolutePath());
+      copyTemplateToConfigFile();
+    }
+
   }
 
-  public boolean configsValid() {
-    /**
-     * Returns True if configuration is set correctly for this project
-     */
+  /**
+   * Returns true if configuration file is filled out correctly for this polling
+   * project.
+   *
+   * @return state of this polling project's configuration file
+   */
+  private boolean configsValid() {
 
     boolean fieldsOK = false;
     Properties config = getConfiguration();
@@ -68,76 +95,10 @@ public class PollingProject {
     return fieldsOK;
   }
 
-  public Properties getConfiguration() {
-    /**
-     * Returns Properties object loaded from this account's configuration file
-     */
-
-    InputStream inStream;
-    Properties config = new Properties();
-
-    try {
-      inStream = new FileInputStream(this.CONFIG_FILE);
-      config.load(inStream);
-    } catch (FileNotFoundException e) {
-      e.printStackTrace();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-
-    return config;
-  }
-
-  public void setConfiguration() {
-    /**
-     * Creates file structure & configuration file using template if it does not
-     * already exist. If it does exist, it will validate the fields and report
-     * if further action is needed to configure the account.
-     */
-
-    boolean fileCreated = false;
-
-    // Create project configuration directory if it doesn't exist
-    if (!this.PROJECT_DIR.exists()) {
-      this.PROJECT_DIR.mkdir();
-    }
-
-    // Create project's accounts configuration directory if it doesn't exist
-    if (!this.ACCTS_DIR.exists()) {
-      this.ACCTS_DIR.mkdir();
-    }
-
-    // Create project's configuration file it doesn't exist
-    try {
-      fileCreated = CONFIG_FILE.createNewFile();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-
-    if (!fileCreated) {
-      if (configsValid()) {
-
-        System.out.println("Configuration file for project '" + this.NAME + "' already exists and has validated.");
-
-      } else {
-
-        System.out.println("Configuration file for " + this.NAME
-            + " already exists, but is not valid. Please check fields: " + this.CONFIG_FILE.getAbsolutePath());
-      }
-
-    } else {
-
-      System.out.println("New file has been created: " + this.CONFIG_FILE.getAbsolutePath());
-
-      copyTemplateToConfigFile();
-    }
-
-  }
-
-  public void copyTemplateToConfigFile() {
-    /**
-     * Copies appropriate template to the account's configuration file.
-     */
+  /**
+   * Copies polling project template to this project's configuration file.
+   */
+  private void copyTemplateToConfigFile() {
 
     File template = new File(CONFIG_TEMPLATE_NAME);
 
@@ -146,26 +107,28 @@ public class PollingProject {
       Properties temp = new Properties();
       temp.load(inStream);
 
-      FileOutputStream outStream = new FileOutputStream(this.CONFIG_FILE);
-      temp.store(outStream, "Properties for polling project " + this.NAME);
+      FileOutputStream outStream = new FileOutputStream(this.getConfigFile());
+      temp.store(outStream, "Properties for polling project " + this.getName());
       outStream.close();
 
-      System.out.println("Project configuration template '" + CONFIG_TEMPLATE_NAME
-          + "' has been copied to configuration file '" + this.CONFIG_FILE.getAbsolutePath()
-          + "'. \nPlease fill out.");
+      System.out.println(
+          "Polling project template has been copied to configuration file :" + this.getConfigFile().getAbsolutePath());
+      System.out.println("Please fill out.");
 
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     } catch (IOException e) {
       e.printStackTrace();
     }
-
   }
 
-  public void addAccount(AccountType accountType) {
-    /**
-     * Creates a new CloudAccount configuration file within accountsDir.
-     */
+  /**
+   * Creates a new CloudAccount configuration file within this project's
+   * accounts configuration directory.
+   *
+   * @param accountType
+   */
+  public void addAccount(CloudAccount.Type accountType) {
 
     int newID = 0;
 
@@ -180,24 +143,49 @@ public class PollingProject {
     // Create new cloud account object & set its configuration
     CloudAccount account = new CloudAccount(newID, this, accountType);
     account.setConfiguration();
+
+    System.out
+        .println(
+            "Added new " + accountType.toString() + "account, 'acct" + Integer.toString(newID)
+                + "' to polling project '" + this.getName() + "'.");
   }
 
-  public String getName() {
-    /**
-     * Getter for NAME
-     */
-    return this.NAME;
+  /**
+   * Edits this project's file
+   *
+   * @param key
+   * @param value
+   */
+  public void updateConfiguration(String key, String value) {
+
+    Properties config = getConfiguration();
+
+    config.setProperty(key, value);
+
+    FileOutputStream outStream;
+    try {
+      outStream = new FileOutputStream(this.getConfigFile());
+      config.store(outStream, "Properties for polling project " + this.getName());
+      outStream.close();
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
   }
 
+  /**
+   * Gets all account id's from accounts configuration directory
+   *
+   * @return list of account id's associated with this polling project
+   */
   public ArrayList<Integer> getAccountIds() {
-    /**
-     * Gets all account id's from accounts configuration directory
-     */
 
     ArrayList<Integer> ids = new ArrayList<Integer>();
     String filename = null;
 
-    File[] files = this.ACCTS_DIR.listFiles();
+    File[] files = this.getAccountsDir().listFiles();
 
     if (files != null) {
       for (File file : files) {
@@ -213,53 +201,85 @@ public class PollingProject {
     return ids;
   }
 
-  public String readConfiguration(String key) {
-    /**
-     * Returns the given field value from the configuration file.
-     */
+  /**
+   * Gets properties object from this polling project's configuration file
+   *
+   * @return configuration properties of this polling project
+   */
+  public Properties getConfiguration() {
 
-    Properties config = getConfiguration();
-    return config.getProperty(key);
-  }
+    InputStream inStream;
+    Properties config = new Properties();
 
-  public String getSyncFolder() {
-    /**
-     * Returns syncFolder field from configuration file
-     */
-    return readConfiguration("syncFolder");
-  }
-
-  public File getAcctsDir() {
-    /**
-     * Getter for ACCTS_DIR
-     */
-    return this.ACCTS_DIR;
-  }
-
-  public String getConfigFile() {
-    return this.CONFIG_FILE.toString();
-  }
-
-  public void updateConfiguration(String key, String value) {
-    /**
-     * Edits this account's configuration file
-     */
-
-    Properties config = getConfiguration();
-
-    config.setProperty(key, value);
-
-    FileOutputStream outStream;
     try {
-      outStream = new FileOutputStream(this.CONFIG_FILE);
-      config.store(outStream, "Properties for polling project " + this.NAME);
-      outStream.close();
+      inStream = new FileInputStream(this.getConfigFile());
+      config.load(inStream);
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     } catch (IOException e) {
       e.printStackTrace();
     }
 
+    return config;
+  }
+
+  /**
+   * Reads the given field value from this project's configuration file.
+   *
+   * @param key
+   * @return given field value from project's configurationfile
+   */
+  public String readConfiguration(String key) {
+    Properties config = getConfiguration();
+    return config.getProperty(key);
+  }
+
+  /**
+   * Returns syncFolder field from this project's configuration file
+   *
+   * @return name of the folder synced with project's cloud accounts
+   */
+  public String getSyncFolder() {
+    return readConfiguration("syncFolder");
+  }
+
+  /**
+   * Gets the configuration directory of this polling project.
+   *
+   * @return name of the folder that holds this polling project's configuration
+   *         files
+   */
+  public File getProjectDir() {
+    return projectDir;
+  }
+
+  /**
+   * Gets the configuration directory of the cloud accounts associated with this
+   * polling project.
+   *
+   * @return name of the folder that holds this configuration files of the cloud
+   *         accounts associated with this polling project
+   */
+  public File getAccountsDir() {
+    return accountsDir;
+  }
+
+  /**
+   * Gets the name of this polling project.
+   *
+   * @return name of this polling project
+   */
+  public String getName() {
+    return name;
+  }
+
+  /**
+   * Gets the configuration file for this polling project.
+   *
+   * @return configuration file for this polling project
+   */
+  public File getConfigFile() {
+    return configFile;
   }
 
 }
