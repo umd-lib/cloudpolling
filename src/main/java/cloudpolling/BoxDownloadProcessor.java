@@ -20,6 +20,10 @@ public class BoxDownloadProcessor extends CloudDownloadProcessor {
     super(project);
   }
 
+  /**
+   * Downloads a box file specified by header "source_id" and constructs a JSON
+   * string for Solr update of that file.
+   */
   @Override
   public void process(Exchange exchange) throws Exception {
 

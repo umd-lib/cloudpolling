@@ -18,7 +18,7 @@ import java.util.Properties;
  */
 public class PollingProject {
 
-  public static final String CONFIG_TEMPLATE_NAME = "src/main/resources/templates/project.properties";
+  private static final String CONFIG_TEMPLATE_NAME = "src/main/resources/templates/project.properties";
 
   public String name;
   public File configFile;
@@ -30,7 +30,9 @@ public class PollingProject {
    * configuration files for cloudpolling projects are stored.
    *
    * @param name
+   *          name of the polling project
    * @param configDir
+   *          directory where project configuration files are stored
    */
   public PollingProject(String name, String configDir) {
     this.name = name;

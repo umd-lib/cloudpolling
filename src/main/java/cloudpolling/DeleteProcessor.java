@@ -20,9 +20,13 @@ public class DeleteProcessor implements Processor {
   private static Logger log = Logger.getLogger(DeleteProcessor.class);
 
   public DeleteProcessor(PollingProject project) {
-    setProject(project);
+    this.project = project;
   }
 
+  /**
+   * Deletes a file or a folder and its children, specified by header
+   * "source_path" and constructs a JSON string for Solr deletion.
+   */
   public void process(Exchange exchange) throws Exception {
 
     // Delete file from local file system
@@ -89,10 +93,6 @@ public class DeleteProcessor implements Processor {
 
   public PollingProject getProject() {
     return this.project;
-  }
-
-  public void setProject(PollingProject p) {
-    this.project = p;
   }
 
 }

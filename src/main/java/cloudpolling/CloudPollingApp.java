@@ -10,7 +10,8 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
 
 /**
- * Main application to poll & handle events from multiple cloud storage services
+ * Main application to poll and handle events from multiple cloud storage
+ * services
  *
  * @author tlarrue
  *
@@ -90,7 +91,7 @@ public class CloudPollingApp {
   }
 
   /**
-   * Creates a Box App User with app user name & enterprise ID specified in
+   * Creates a Box App User with app user name and enterprise ID specified in
    * account's configuration file.
    *
    * @param projectName
@@ -187,7 +188,7 @@ public class CloudPollingApp {
   }
 
   /**
-   * Constructs a polling project object & checks its configuration.
+   * Constructs a polling project object and checks its configuration.
    *
    * @param projectName
    * @param topConfigDir
@@ -214,7 +215,7 @@ public class CloudPollingApp {
         + "\n add <projectname> <acct_type> : adds a cloud account to a project (types: Box, DropBox, Drive)"
         + "\n poll <projectname> : polls all accounts in a project and syncs account folder with local system"
         + "\n reset <projectname> : resets poll tokens on all accounts associated with given project"
-        + "\n boxappuser <projectname> <acct_name> : creates a box app user for given account - enterpriseID & appUserName must be filled out in account's configuration file";
+        + "\n boxappuser <projectname> <acct_name> : creates a box app user for given account - enterpriseID and appUserName must be filled out in account's configuration file";
 
     CommandSet set = new CommandSet();
     int numArgs = args.length;

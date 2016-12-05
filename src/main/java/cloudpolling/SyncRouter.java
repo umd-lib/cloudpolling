@@ -6,8 +6,8 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
- * SyncRouter contains all route configurations to sync disparate Box, DropBox &
- * Drive accounts with a local file system and solr instance
+ * SyncRouter contains all route configurations to sync disparate Box, DropBox,
+ * and Drive accounts with a local file system and solr instance
  *
  * @author tlarrue
  *
