@@ -105,8 +105,8 @@ public class BoxConnector extends CloudConnector {
   }
 
   /**
-   * Connects to Box & starts long polling Box events. On an event, sends
-   * exchange to ActionListener & update's account's poll token.
+   * Connects to Box and starts long polling Box events. On an event, sends
+   * exchange to ActionListener and update's account's poll token.
    */
   public void poll() throws Exception {
 
@@ -244,7 +244,8 @@ public class BoxConnector extends CloudConnector {
       Thread.sleep(1000 * 30 * 1); // 30 seconds to receive events from box
       stream.stop();
 
-      // If poll token is 0, get a current stream position & download all files
+      // If poll token is 0, get a current stream position and download all
+      // files
       // from that account to the sync folder
     } else {
       updatePollToken(getCurrentStreamPosition(api));
@@ -343,7 +344,7 @@ public class BoxConnector extends CloudConnector {
   }
 
   /**
-   * Send message exchange including this account id & type information as
+   * Send message exchange including this account id and type information as
    * headers.
    *
    * @param headers

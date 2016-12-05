@@ -91,8 +91,8 @@ public class DropBoxConnector extends CloudConnector {
   }
 
   /**
-   * Connects to DropBox & starts long polling Box events. On an event, sends
-   * exchange to ActionListener & update's account's poll token.
+   * Connects to DropBox and starts long polling Box events. On an event, sends
+   * exchange to ActionListener and update's account's poll token.
    *
    * @throws IOException
    */

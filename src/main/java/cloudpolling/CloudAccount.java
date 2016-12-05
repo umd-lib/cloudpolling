@@ -65,7 +65,7 @@ public class CloudAccount {
   }
 
   /**
-   * Constructs a cloud account from its id & parent project assuming the
+   * Constructs a cloud account from its id and parent project assuming the
    * associated configuration file already exists.
    *
    * @param id
