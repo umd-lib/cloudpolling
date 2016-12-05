@@ -120,48 +120,112 @@ public class BoxConnector extends CloudConnector {
 
       stream.addListener(new EventListener() {
 
-        JsonObject body;
+        String body;
         HashMap<String, String> headers;
 
         public void onEvent(BoxEvent event) {
+
           log.info("Box event received of type: " + event.getType().toString());
 
-          body = event.getSourceJSON();
+          body = event.toString();
           headers = new HashMap<String, String>();
+
           BoxItem.Info srcInfo = (BoxItem.Info) event.getSourceInfo();
-          headers.put("source_id", event.getSourceInfo().getID());
-          String dest = getFullBoxPath(srcInfo);
-          headers.put("destination", dest);
+          if (srcInfo != null) {
 
-          switch (event.getType()) {
+            headers.put("source_id", srcInfo.getID());
+            headers.put("source_name", srcInfo.getName());
+            headers.put("source_path", getFullBoxPath(srcInfo));
 
-          case ITEM_UPLOAD:
-          case EDIT:
-          case ITEM_CREATE:
-          case ITEM_UNDELETE_VIA_TRASH:
-          case UNDELETE:
-          case UPLOAD:
+            switch (event.getType()) {
 
-            // verify item is a download-able file
-            if (!(event.getSourceInfo() instanceof BoxFile.Info)) {
-              log.info("Box item created or edited is not a downloadable file - unhandled event.");
-            } else {
-              headers.put("action", "download");
-              sendActionExchangeWithAcctInfo(headers, body.toString());
+            case ITEM_UPLOAD:
+            case ITEM_CREATE:
+            case ITEM_UNDELETE_VIA_TRASH:
+            case ITEM_COPY:
+
+              if (srcInfo instanceof BoxFile.Info) {
+
+                // BoxFile file = (BoxFile) srcInfo.getResource();
+                BoxFile file = new BoxFile(api, srcInfo.getID());
+
+                headers.put("source_type", "file");
+                BoxFolder.Info parent = file.getInfo().getParent();
+                headers.put("parent_id", parent.getID());
+                try {
+                  headers.put("metadata", file.getMetadata().toString());
+                } catch (Exception ex) {
+                  headers.put("metadata", "none");
+                }
+
+                headers.put("action", "download");
+
+              } else {
+                BoxFolder folder = new BoxFolder(api, srcInfo.getID());
+                headers.put("source_type", "folder");
+                BoxFolder.Info parent = folder.getInfo().getParent();
+                headers.put("parent_id", parent.getID());
+                headers.put("action", "make_directory");
+              }
+              sendActionExchangeWithAcctInfo(headers, body);
+              break;
+
+            case ITEM_RENAME:
+            case ITEM_MOVE:
+
+              // It does not look like there is a way to see attributes of a
+              // previous version of file.
+              // If an item is renamed or moved, we download the most recent
+              // version of the file
+              // BUT THE OLD VERSION MAY STILL BE IN THE LOCAL STORE since we
+              // cannot look it up by path location
+              // NOTE: We can 'guess' the location of the old file, if it is
+              // still in
+              // the same directory using BoxFile.getVersions(), and
+              // BoxFileVersion.getName(), but I do not implement this here
+              // since it will only work some of the time.
+              // I leave these 2 event types to handled separately in case a new
+              // handling method is found.
+
+              if (srcInfo instanceof BoxFile.Info) {
+
+                // BoxFile file = (BoxFile) srcInfo.getResource();
+                BoxFile file = new BoxFile(api, srcInfo.getID());
+
+                headers.put("source_type", "file");
+                BoxFolder.Info parent = file.getInfo().getParent();
+                headers.put("parent_id", parent.getID());
+                try {
+                  headers.put("metadata", file.getMetadata().toString());
+                } catch (Exception ex) {
+                  headers.put("metadata", "none");
+                }
+
+                headers.put("action", "download");
+
+              } else {
+                BoxFolder folder = new BoxFolder(api, srcInfo.getID());
+                headers.put("source_type", "folder");
+                BoxFolder.Info parent = folder.getInfo().getParent();
+                headers.put("parent_id", parent.getID());
+                headers.put("action", "make_directory");
+              }
+              sendActionExchangeWithAcctInfo(headers, body);
+              break;
+
+            case ITEM_TRASH:
+              headers.put("action", "delete");
+              headers.put("details", "remove_childen");
+              sendActionExchangeWithAcctInfo(headers, body);
+              break;
+
+            default:
+              log.info("Unhandled Box event.");
+              break;
             }
-            break;
 
-          case ITEM_TRASH:
-          case DELETE:
-            headers.put("action", "delete");
-
-            sendActionExchangeWithAcctInfo(headers, body.toString());
-            break;
-
-          default:
-            log.info("Unhandled Box event.");
-            break;
           }
+
         }
 
         public void onNextPosition(long position) {
@@ -230,7 +294,7 @@ public class BoxConnector extends CloudConnector {
   private void downloadAllFiles(BoxDeveloperEditionAPIConnection api) {
     BoxFolder rootFolder = BoxFolder.getRootFolder(api);
     String rootPath = Paths.get("").toString();
-    exchangeFolderItems(rootFolder, rootPath);
+    exchangeFolderItems(rootFolder, rootPath, api);
   }
 
   /**
@@ -240,23 +304,40 @@ public class BoxConnector extends CloudConnector {
    * @param folder
    * @param depth
    */
-  private void exchangeFolderItems(BoxFolder folder, String path) {
-
-    HashMap<String, String> headers = new HashMap<String, String>();
+  private void exchangeFolderItems(BoxFolder folder, String path, BoxDeveloperEditionAPIConnection api) {
 
     for (BoxItem.Info itemInfo : folder) {
 
+      HashMap<String, String> headers = new HashMap<String, String>();
+      String itemID = itemInfo.getID();
+      String itemName = itemInfo.getName();
+      String itemPath = Paths.get(path, itemName).toString();
+      headers.put("source_id", itemID);
+      headers.put("source_name", itemName);
+      headers.put("source_path", itemPath);
+
       if (itemInfo instanceof BoxFile.Info) {
-        BoxFile.Info fileInfo = (BoxFile.Info) itemInfo;
+        BoxFile file = new BoxFile(api, itemID); // need to connect again to get
+                                                 // all file info
 
         headers.put("action", "download");
-        headers.put("source_id", itemInfo.getID());
-        headers.put("destination", Paths.get(path, fileInfo.getName()).toString());
-        sendActionExchangeWithAcctInfo(headers, fileInfo.toString());
+        headers.put("parent_id", file.getInfo().getParent().getID());
+        sendActionExchangeWithAcctInfo(headers, file.getInfo().toString());
 
       } else if (itemInfo instanceof BoxFolder.Info) {
-        BoxFolder.Info folderInfo = (BoxFolder.Info) itemInfo;
-        exchangeFolderItems(folderInfo.getResource(), Paths.get(path, folderInfo.getName()).toString());
+        BoxFolder dir = new BoxFolder(api, itemID); // need to connect again to
+                                                    // get all folder info
+
+        headers.put("action", "make_directory");
+        BoxFolder.Info parent = dir.getInfo().getParent();
+        if (parent == null) {
+          headers.put("parnet_id", "none");
+        } else {
+          headers.put("parent_id", parent.getID());
+        }
+
+        sendActionExchangeWithAcctInfo(headers, dir.getInfo().toString());
+        exchangeFolderItems(dir, itemPath, api);
       }
     }
   }

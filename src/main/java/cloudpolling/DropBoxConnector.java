@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.SocketTimeoutException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -25,12 +27,18 @@ import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.DeletedMetadata;
 import com.dropbox.core.v2.files.FileMetadata;
 import com.dropbox.core.v2.files.FolderMetadata;
-import com.dropbox.core.v2.files.ListFolderErrorException;
-import com.dropbox.core.v2.files.ListFolderGetLatestCursorResult;
 import com.dropbox.core.v2.files.ListFolderLongpollResult;
 import com.dropbox.core.v2.files.ListFolderResult;
+import com.dropbox.core.v2.files.ListRevisionsErrorException;
+import com.dropbox.core.v2.files.ListRevisionsResult;
 import com.dropbox.core.v2.files.Metadata;
 
+/**
+ * Represents a connection between a DropBox account and a camel context.
+ *
+ * @author tlarrue
+ *
+ */
 public class DropBoxConnector extends CloudConnector {
 
   private String accountID;
@@ -38,14 +46,22 @@ public class DropBoxConnector extends CloudConnector {
   private String appSecret;
   private String userID;
   private String accessToken;
+  private String pollFolder;
   private String cursor;
 
   private static Logger log = Logger.getLogger(DropBoxConnector.class);
 
+  /**
+   * Constructs a DropBoxConnector from a cloud account and producer template.
+   * This constructor also provides instructions to authorize application to
+   * folder if there is no access token in the account's configuration file.
+   *
+   * @param account
+   * @param producer
+   */
   public DropBoxConnector(CloudAccount account, ProducerTemplate producer) {
     super(account, producer);
     setAuthInfo(this.getAccount().getConfiguration());
-    setCursor(this.getAccount().getPollToken());
 
     // authorize application if there is no access token
     DbxRequestConfig requestConfig = new DbxRequestConfig(this.getAccountID());
@@ -58,80 +74,90 @@ public class DropBoxConnector extends CloudConnector {
     }
   }
 
-  public void setAuthInfo(Properties config) {
-    setAccountID(config.getProperty("configID"));
-    setAppKey(config.getProperty("appKey"));
-    setAppSecret(config.getProperty("appSecret"));
-    setUserID(config.getProperty("userID"));
-    setAccessToken(config.getProperty("accessToken"));
+  /**
+   * Sets authentication fields for this DropBox connection from this account's
+   * configuration.
+   *
+   * @param config
+   */
+  private void setAuthInfo(Properties config) {
+    this.accountID = config.getProperty("configID");
+    this.appKey = config.getProperty("appKey");
+    this.appSecret = config.getProperty("appSecret");
+    this.userID = config.getProperty("userID");
+    this.accessToken = config.getProperty("accessToken");
+    this.pollFolder = config.getProperty("pollFolder", "");
+    this.cursor = config.getProperty("pollToken");
   }
 
-  public void downloadAllFiles(DbxClientV2 client) throws ListFolderErrorException, DbxException {
-    ListFolderResult result = client.files().listFolder("");
-
-    while (true) {
-      for (Metadata metadata : result.getEntries()) {
-        constructHeadersAndSend(metadata);
-      }
-
-      if (!result.getHasMore()) {
-        break;
-      }
-
-      result = client.files().listFolderContinue(result.getCursor());
-    }
-  }
-
+  /**
+   * Connects to DropBox & starts long polling Box events. On an event, sends
+   * exchange to ActionListener & update's account's poll token.
+   *
+   * @throws IOException
+   */
   public void poll() throws IOException {
 
+    // Create 2 DropBox clients:
+    // 1) for long poll request (longer read timeout)
+    // 2) for all other requests
     long longpollTimeoutSecs = TimeUnit.MINUTES.toSeconds(1);
-
-    // Create 2 Dropbox clients:
-    // (1) One for longpoll requests, with its read timeout set longer than our
-    // polling timeout
-    // (2) One for all other requests, with its read timeout set to the default,
-    // shorter timeout
-
     DbxAuthInfo auth = new DbxAuthInfo(this.getAccessToken(), DbxHost.DEFAULT);
     StandardHttpRequestor.Config config = StandardHttpRequestor.Config.DEFAULT_INSTANCE;
     StandardHttpRequestor.Config longpollConfig = config.copy()
         // read timeout should be greater than our longpoll timeout and include
-        // enough buffer
-        // for the jitter introduced by the server. The server will add a random
-        // amount of delay
-        // to our longpoll timeout to avoid the stampeding herd problem. See
-        // DbxFiles.listFolderLongpoll(String, long) documentation for details.
+        // enough buffer for the jitter introduced by the server. The server
+        // will add a random amount of delay to our longpoll timeout to avoid
+        // the stampeding herd problem. See DbxFiles.listFolderLongpoll(String,
+        // long) documentation for details.
         .withReadTimeout(5, TimeUnit.MINUTES)
         .build();
-
     DbxClientV2 dbxClient = createClient(getAccountID(), auth, config);
     DbxClientV2 dbxLongpollClient = createClient(getAccountID(), auth, longpollConfig);
+    ListFolderResult result = null;
+    boolean ignoreDeleted = false;
 
     try {
-      // We only care about file changes, not existing files, so grab latest
-      // cursor for this
-      // path and then longpoll for changes.
 
-      if (getCursor().length() == 1) {
+      if (this.getCursor().length() == 1) {
+        // If cursor=="0", request all items in DropBox account
         log.info("First time connecting to DropBox Account " + accountID
             + ". Downloading all account items to local sync folder...");
-        downloadAllFiles(dbxClient);
-        setCursor(getLatestCursor(dbxClient, ""));
-        getAccount().updateConfiguration("pollToken", getCursor());
+
+        result = dbxClient.files()
+            .listFolderBuilder(this.getPollFolder())
+            .withIncludeDeleted(true)
+            .withIncludeMediaInfo(false)
+            .withRecursive(true)
+            .start();
+        ignoreDeleted = true;
+
       } else {
+        // If cursor !="0", only request changes since last cursor
         log.info("Longpolling for DropBox changes... press CTRL-C to exit.");
 
-        // will block for longpollTimeoutSecs or until a change is made in the
-        // folder
-        ListFolderLongpollResult result = dbxLongpollClient.files()
-            .listFolderLongpoll(getCursor(), longpollTimeoutSecs);
+        ListFolderLongpollResult longpollResult = dbxLongpollClient.files()
+            .listFolderLongpoll(this.getCursor(), longpollTimeoutSecs);
 
-        // parse the responses into exchanges & update poll token for the
-        // account
-        if (result.getChanges()) {
-          parseChanges(dbxClient, getCursor());
+        if (longpollResult.getChanges()) {
+          result = dbxClient.files().listFolderContinue(this.getCursor());
         }
       }
+
+      // process all entries in request results
+      while (true) {
+        for (Metadata metadata : result.getEntries()) {
+          processItem(metadata, dbxClient, ignoreDeleted);
+        }
+        if (!result.getHasMore()) {
+          break;
+        }
+        result = dbxClient.files().listFolderContinue(result.getCursor());
+      }
+
+      // update this cursor & poll token in account configuration
+      this.cursor = result.getCursor();
+      this.getAccount().updateConfiguration("pollToken", this.getCursor());
 
     } catch (DbxApiException ex) {
       // if a user message is available, try using that instead
@@ -151,7 +177,18 @@ public class DropBoxConnector extends CloudConnector {
 
   }
 
-  private void constructHeadersAndSend(Metadata metadata) {
+  /**
+   * Processes a DropBox item (file, folder, or deleted item) by sending message
+   * exchange to ActionListener with instructions to sync local file system Sync
+   * Processing described here:
+   * https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder
+   *
+   * @param metadata
+   * @throws DbxException
+   * @throws ListRevisionsErrorException
+   */
+  private void processItem(Metadata metadata, DbxClientV2 client, boolean ignoreDeleted)
+      throws ListRevisionsErrorException, DbxException {
 
     HashMap<String, String> headers = new HashMap<String, String>();
 
@@ -159,73 +196,67 @@ public class DropBoxConnector extends CloudConnector {
       FileMetadata fileMetadata = (FileMetadata) metadata;
       headers.put("action", "download");
       headers.put("source_id", fileMetadata.getId());
-      headers.put("source_type", "file");
+      headers.put("source_name", fileMetadata.getName());
       headers.put("source_path", fileMetadata.getPathLower());
-      headers.put("details", fileMetadata.getRev());
+      Path parentPath = Paths.get(fileMetadata.getPathLower()).getParent();
+      String parentID;
+      try {
+        FolderMetadata parentMetadata = (FolderMetadata) client.files().getMetadata(parentPath.toString());
+        parentID = parentMetadata.getId();
+      } catch (DbxException ex) {
+        parentID = "0"; // dummy ID for root folder
+      }
+      headers.put("parent_id", parentID);
+      headers.put("details", fileMetadata.getRev()); // revision id
+      headers.put("source_type", "file");
+      headers.put("metadata", "none"); // TODO: gather custom metadata from
+                                       // FileMetadata attributes
 
     } else if (metadata instanceof FolderMetadata) {
       FolderMetadata folderMetadata = (FolderMetadata) metadata;
-      headers.put("action", "download");
+      headers.put("action", "make_directory");
       headers.put("source_id", folderMetadata.getId());
-      headers.put("source_type", "folder");
+      headers.put("source_name", folderMetadata.getName());
       headers.put("source_path", folderMetadata.getPathLower());
-      headers.put("details", folderMetadata.getSharingInfo().toString());
+      Path parentPath = Paths.get(folderMetadata.getPathLower()).getParent();
+      String parentID;
+      try {
+        FolderMetadata parentMetadata = (FolderMetadata) client.files().getMetadata(parentPath.toString());
+        parentID = parentMetadata.getId();
+      } catch (DbxException ex) {
+        parentID = "0"; // dummy ID for root folder
+      }
+      headers.put("details", parentID);
+      headers.put("source_type", "folder");
+      headers.put("metadata", "none"); // TODO: gather custom metadata from
+                                       // FolderMetadata attributes
 
     } else if (metadata instanceof DeletedMetadata) {
-      headers.put("source_id", "UNKNOWN");
-      headers.put("action", "delete");
-      headers.put("source_type", "deleted");
-      headers.put("destination", metadata.getPathLower());
-      headers.put("details", "");
+
+      if (!ignoreDeleted) {
+        // find id of deleted item
+        ListRevisionsResult result = client.files().listRevisions(metadata.getPathLower());
+        FileMetadata fm = result.getEntries().get(0);
+        String deleted_id = fm.getId();
+
+        if (deleted_id != null) {
+          headers.put("source_id", deleted_id);
+        } else {
+          headers.put("source_id", "unknown");
+        }
+
+        headers.put("action", "delete");
+        headers.put("source_path", metadata.getPathLower());
+        headers.put("details", "remove_childen");
+      }
 
     } else {
       throw new IllegalStateException("Unrecognized metadata type: " + metadata.getClass());
     }
 
     headers.put("account_type", "dropbox");
-    headers.put("account_id", getAccountID());
+    headers.put("account_id", this.getAccountID());
     sendActionExchange(headers, "");
-  }
-
-  private void parseChanges(DbxClientV2 client, String cursor) throws DbxApiException, DbxException {
-    while (true) {
-
-      ListFolderResult result = client.files().listFolderContinue(cursor);
-
-      for (Metadata metadata : result.getEntries()) {
-        constructHeadersAndSend(metadata);
-      }
-
-      // update cursor to fetch remaining results
-      setCursor(result.getCursor());
-      getAccount().updateConfiguration("pollToken", getCursor());
-
-      if (!result.getHasMore()) {
-        break;
-      }
-    }
-  }
-
-  /**
-   * Returns latest cursor for listing changes to a directory in Dropbox with
-   * the given path.
-   *
-   * @param dbxClient
-   *          Dropbox client to use for fetching the latest cursor
-   * @param path
-   *          path to directory in Dropbox
-   *
-   * @return cursor for listing changes to the given Dropbox directory
-   */
-  private static String getLatestCursor(DbxClientV2 dbxClient, String path)
-      throws DbxApiException, DbxException {
-    ListFolderGetLatestCursorResult result = dbxClient.files()
-        .listFolderGetLatestCursorBuilder(path)
-        .withIncludeDeleted(true)
-        .withIncludeMediaInfo(false)
-        .withRecursive(true)
-        .start();
-    return result.getCursor();
   }
 
   /**
@@ -249,11 +280,13 @@ public class DropBoxConnector extends CloudConnector {
     return new DbxClientV2(requestConfig, auth.getAccessToken(), auth.getHost());
   }
 
-  public void authorizeApp(DbxRequestConfig requestConfig) throws IOException {
-    /**
-     * Run Dropbox API Authorization process
-     */
-
+  /**
+   * Run Dropbox API Authorization process
+   *
+   * @param requestConfig
+   * @throws IOException
+   */
+  private void authorizeApp(DbxRequestConfig requestConfig) throws IOException {
     DbxAppInfo appInfo = new DbxAppInfo(this.getAppKey(), this.getAppSecret());
     DbxWebAuth webAuth = new DbxWebAuth(requestConfig, appInfo);
     DbxWebAuth.Request webAuthRequest = DbxWebAuth.newRequestBuilder()
@@ -287,9 +320,9 @@ public class DropBoxConnector extends CloudConnector {
     System.out.println("- Access Token: " + authFinish.getAccessToken());
 
     // save authorization info
-    this.setUserID(authFinish.getUserId());
+    this.userID = authFinish.getUserId();
     this.getAccount().updateConfiguration("userID", this.getUserID());
-    this.setAccessToken(authFinish.getAccessToken());
+    this.accessToken = authFinish.getAccessToken();
     this.getAccount().updateConfiguration("accessToken", this.getAccessToken());
   }
 
@@ -297,48 +330,28 @@ public class DropBoxConnector extends CloudConnector {
     return accountID;
   }
 
-  public void setAccountID(String accountID) {
-    this.accountID = accountID;
-  }
-
   public String getAppKey() {
     return appKey;
-  }
-
-  public void setAppKey(String appKey) {
-    this.appKey = appKey;
   }
 
   public String getAppSecret() {
     return appSecret;
   }
 
-  public void setAppSecret(String appSecret) {
-    this.appSecret = appSecret;
-  }
-
   public String getUserID() {
     return userID;
-  }
-
-  public void setUserID(String userID) {
-    this.userID = userID;
   }
 
   public String getAccessToken() {
     return accessToken;
   }
 
-  public void setAccessToken(String accessToken) {
-    this.accessToken = accessToken;
-  }
-
   public String getCursor() {
     return cursor;
   }
 
-  public void setCursor(String cursor) {
-    this.cursor = cursor;
+  public String getPollFolder() {
+    return pollFolder;
   }
 
 }

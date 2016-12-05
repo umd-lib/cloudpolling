@@ -50,6 +50,11 @@ public class DropBoxDownloadProcessor extends CloudDownloadProcessor {
     client.files().download(dropboxPath, details).download(out);
     out.flush();
     out.close();
+
+    // create JSON for SolrUpdater exchange
+    String sourceID = exchange.getIn().getHeader("source_id", String.class);
+    log.info("Creating JSON for indexing DropBox file with ID:" + sourceID);
+    super.process(exchange);
   }
 
 }

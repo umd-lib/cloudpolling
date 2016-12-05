@@ -129,11 +129,15 @@ public class CloudPollingApp {
     System.out.println("Resetting all poll tokens...");
 
     project.updateConfiguration("lastPoll", "1900/01/01-00:00:00");
+    System.out.println("'" + projectName + "' project's poll token reset.");
+
     ArrayList<Integer> ids = project.getAccountIds();
     for (Integer id : ids) {
       CloudAccount acct = new CloudAccount(id, project);
       acct.updateConfiguration("pollToken", "0");
+      System.out.println("\tAccount " + Integer.toString(id) + "'s poll token reset.");
     }
+
   }
 
   /**
@@ -174,7 +178,7 @@ public class CloudPollingApp {
     context.addRoutes(routes);
 
     context.start();
-    Thread.sleep(1000 * 60 * 2);
+    Thread.sleep(1000 * 60 * 5); // 5 minutes
     context.stop();
 
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss");

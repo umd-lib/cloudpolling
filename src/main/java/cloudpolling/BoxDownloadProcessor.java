@@ -36,7 +36,7 @@ public class BoxDownloadProcessor extends CloudDownloadProcessor {
     BoxFile srcFile = new BoxFile(api, sourceID);
 
     // Get download destination
-    String boxPath = exchange.getIn().getHeader("destination", String.class);
+    String boxPath = exchange.getIn().getHeader("source_path", String.class);
     String syncFolder = getProject().getSyncFolder();
     String acct = "acct" + Integer.toString(accountID);
     String dest = Paths.get(syncFolder, acct, boxPath).toString();
@@ -56,6 +56,10 @@ public class BoxDownloadProcessor extends CloudDownloadProcessor {
     srcFile.download(out);
     out.flush();
     out.close();
+
+    // create JSON for SolrUpdater exchange
+    log.info("Creating JSON for indexing Box file with ID:" + sourceID);
+    super.process(exchange);
 
   }
 

@@ -1,8 +1,5 @@
 package cloudpolling;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.Predicate;
 import org.apache.camel.ProducerTemplate;
@@ -23,13 +20,14 @@ public class SyncRouter extends RouteBuilder {
 
   Predicate delete = header("action").isEqualTo("delete");
   Predicate download = header("action").isEqualTo("download");
+  Predicate makedir = header("action").isEqualTo("make_directory");
   Predicate box = header("account_type").isEqualTo("box");
   Predicate dropbox = header("account_type").isEqualTo("dropbox");
   Predicate googledrive = header("account_type").isEqualTo("googledrive");
 
   public SyncRouter(PollingProject project, ProducerTemplate producer) {
-    setProject(project);
-    setProducer(producer);
+    this.project = project;
+    this.producer = producer;
   }
 
   @Override
@@ -39,7 +37,7 @@ public class SyncRouter extends RouteBuilder {
      * Starting Point: poll changes from each cloud source, handle responses by
      * sending exchange to ActionListener route.
      */
-    for (int id : getProject().getAccountIds()) {
+    for (int id : this.getProject().getAccountIds()) {
 
       CloudAccount account = new CloudAccount(id, getProject());
       account.setConfiguration();
@@ -47,17 +45,17 @@ public class SyncRouter extends RouteBuilder {
       switch (account.getType()) {
 
       case BOX:
-        BoxConnector boxconnect = new BoxConnector(account, getProducer());
+        BoxConnector boxconnect = new BoxConnector(account, this.getProducer());
         from("timer://foo?repeatCount=1").bean(boxconnect, "poll");
         break;
 
       case DROPBOX:
-        DropBoxConnector dbconnect = new DropBoxConnector(account, getProducer());
+        DropBoxConnector dbconnect = new DropBoxConnector(account, this.getProducer());
         from("timer://foo?repeatCount=1").bean(dbconnect, "poll");
         break;
 
       case GOOGLEDRIVE:
-        GoogleDriveConnector gdconnect = new GoogleDriveConnector(account, getProducer());
+        GoogleDriveConnector gdconnect = new GoogleDriveConnector(account, this.getProducer());
         from("timer://foo?repeatCount=1").bean(gdconnect, "poll");
         break;
       }
@@ -68,17 +66,18 @@ public class SyncRouter extends RouteBuilder {
      * FolderListener: listens on project's sync folder for changes since last
      * poll & sends file exchange to SolrUpdater
      */
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss");
-    Date lastPoll = sdf.parse(getProject().readConfiguration("lastPoll"));
-    from("file:" + getProject().getSyncFolder()
-        + "?recursive=true"
-        + "&delete=false"
-        + "&noop=true"
-        + "&idempotentKey=${file:name}-${file:modified}")
-            .filter(header("CamelFileLastModified").isGreaterThan(lastPoll))
-            .routeId("FolderListener")
-            .log("Detected a change to local file system.")
-            .to("direct:update.solr");
+    // NO LONGER NECESSARY
+    /*
+     * SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss"); Date
+     * lastPoll = sdf.parse(this.getProject().readConfiguration("lastPoll"));
+     * from("file:" + this.getProject().getSyncFolder() + "?recursive=true" +
+     * "&delete=false" + "&noop=true" +
+     * "&idempotentKey=${file:name}-${file:modified}")
+     * .filter(header("CamelFileLastModified").isGreaterThan(lastPoll))
+     * .routeId("FolderListener")
+     * .log("Detected a change to local file system.")
+     * .to("direct:update.solr");
+     */
 
     /**
      * ActionListener: receives exchanges resulting from polling cloud account
@@ -93,6 +92,8 @@ public class SyncRouter extends RouteBuilder {
         .to("direct:download.filesys")
         .when(delete)
         .to("direct:delete.filesys")
+        .when(makedir)
+        .to("direct:makedir.filesys")
         .otherwise()
         .to("direct:default");
 
@@ -106,11 +107,14 @@ public class SyncRouter extends RouteBuilder {
         .log("Request received to download a file from the cloud.")
         .choice()
         .when(box)
-        .process(new BoxDownloadProcessor(getProject()))
+        .process(new BoxDownloadProcessor(this.getProject()))
+        .to("direct:update.solr")
         .when(dropbox)
-        .process(new DropBoxDownloadProcessor(getProject()))
+        .process(new DropBoxDownloadProcessor(this.getProject()))
+        .to("direct:update.solr")
         .when(googledrive)
-        .process(new GoogleDriveDownloadProcessor(getProject()))
+        .process(new GoogleDriveDownloadProcessor(this.getProject()))
+        .to("direct:update.solr")
         .otherwise()
         .to("direct:default");
 
@@ -121,14 +125,24 @@ public class SyncRouter extends RouteBuilder {
     from("direct:delete.filesys")
         .routeId("FileDeleter")
         .log("Deleting a file on local file system")
-        .process(new DeleteProcessor(getProject()))
+        .process(new DeleteProcessor(this.getProject()))
         .to("direct:delete.solr");
+
+    /**
+     * DirectoryMaker: receives a message with info about a folder to make &
+     * handles by making that directory on the local file system.
+     */
+    from("direct:makedir.filesys")
+        .routeId("DirectoryMaker")
+        .log("Creating a directory on local file system")
+        .process(new MakedirProcessor(this.getProject()))
+        .to("direct:update.solr");
 
     /**
      * SolrUpdater: receives file exchange, processes it, & sends request to
      * solr instance to index update
      */
-    // TODO: Add logic to set headers for solr request for an update
+    // TODO: Add Solr address for updates
     from("direct:update.solr")
         .routeId("SolrUpdater")
         .log("Updating Solr object.");
@@ -138,7 +152,7 @@ public class SyncRouter extends RouteBuilder {
      * SolrDeleter: receives file exchange, processes it, & sends request to
      * solr instance to delete file from indexing
      */
-    // TODO: Add logic to set headers for solr request for delete
+    // TODO: Add Solr address for deletions
     from("direct:delete.solr")
         .routeId("SolrDeleter")
         .log("Deleting Solr object.");
@@ -154,19 +168,11 @@ public class SyncRouter extends RouteBuilder {
   }
 
   public PollingProject getProject() {
-    return this.project;
-  }
-
-  public void setProject(PollingProject p) {
-    this.project = p;
+    return project;
   }
 
   public ProducerTemplate getProducer() {
-    return this.producer;
-  }
-
-  public void setProducer(ProducerTemplate p) {
-    this.producer = p;
+    return producer;
   }
 
 }
