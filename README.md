@@ -22,7 +22,7 @@ Each of the supported cloud storage sites come with their own set of instruction
 * DropBox: https://www.dropbox.com/developers
 * GoogleDrive: https://console.developers.google.com/flows/enableapi?apiid=drive&authuser=3
 
-**MORE INFO on usage, implementation logic, & project status for UMD members**
+**MORE INFO on usage, implementation logic, & project status for UMD members:**
 https://docs.google.com/a/umd.edu/document/d/1Gph5Vh9UqrkIzwnVVPQrLiucOEjirqOF5927EFPv0lw/edit?usp=sharing
 
 
