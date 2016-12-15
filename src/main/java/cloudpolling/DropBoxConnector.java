@@ -101,7 +101,7 @@ public class DropBoxConnector extends CloudConnector {
     // Create 2 DropBox clients:
     // 1) for long poll request (longer read timeout)
     // 2) for all other requests
-    long longpollTimeoutSecs = TimeUnit.MINUTES.toSeconds(1);
+    long longpollTimeoutSecs = TimeUnit.MINUTES.toSeconds(3);
     DbxAuthInfo auth = new DbxAuthInfo(this.getAccessToken(), DbxHost.DEFAULT);
     StandardHttpRequestor.Config config = StandardHttpRequestor.Config.DEFAULT_INSTANCE;
     StandardHttpRequestor.Config longpollConfig = config.copy()
@@ -119,7 +119,7 @@ public class DropBoxConnector extends CloudConnector {
 
     try {
 
-      if (this.getCursor().length() == 1) {
+      if (this.getCursor().equals("0")) {
         // If cursor=="0", request all items in DropBox account
         log.info("First time connecting to DropBox Account " + accountID
             + ". Downloading all account items to local sync folder...");
@@ -145,7 +145,7 @@ public class DropBoxConnector extends CloudConnector {
       }
 
       // process all entries in request results
-      while (true) {
+      while (result != null) {
         for (Metadata metadata : result.getEntries()) {
           processItem(metadata, dbxClient, ignoreDeleted);
         }
@@ -153,11 +153,11 @@ public class DropBoxConnector extends CloudConnector {
           break;
         }
         result = dbxClient.files().listFolderContinue(result.getCursor());
-      }
 
-      // update this cursor & poll token in account configuration
-      this.cursor = result.getCursor();
-      this.getAccount().updateConfiguration("pollToken", this.getCursor());
+        // update this cursor & poll token in account configuration
+        this.cursor = result.getCursor();
+        this.getAccount().updateConfiguration("pollToken", this.getCursor());
+      }
 
     } catch (DbxApiException ex) {
       // if a user message is available, try using that instead
@@ -226,7 +226,8 @@ public class DropBoxConnector extends CloudConnector {
       } catch (DbxException ex) {
         parentID = "0"; // dummy ID for root folder
       }
-      headers.put("details", parentID);
+      headers.put("parent_id", parentID);
+      // headers.put("details", parentID);
       headers.put("source_type", "folder");
       headers.put("metadata", "none"); // TODO: gather custom metadata from
                                        // FolderMetadata attributes

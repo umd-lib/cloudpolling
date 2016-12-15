@@ -282,6 +282,7 @@ public class BoxConnector extends CloudConnector {
     BoxUser.Info user = BoxUser.createAppUser(api, this.getAppUserName(), params);
 
     System.out.format("User created with name %s and id %s\n\n", this.getAppUserName(), user.getID());
+    System.out.format("Email login for app user: %s\n\n", user.getLogin());
 
     return user.getID();
   }

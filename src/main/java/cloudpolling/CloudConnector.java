@@ -35,7 +35,7 @@ public abstract class CloudConnector {
   }
 
   /**
-   * Sends a new message exchange with given headers and body to ActionListen
+   * Sends a new message exchange with given headers and body to ActionListener
    * route
    *
    * @param headers

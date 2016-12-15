@@ -7,7 +7,7 @@ import org.apache.camel.builder.RouteBuilder;
 
 /**
  * SyncRouter contains all route configurations to sync disparate Box, DropBox,
- * and Drive accounts with a local file system and solr instance
+ * and Drive accounts with a local file system and Solr instance
  *
  * @author tlarrue
  *
@@ -40,23 +40,33 @@ public class SyncRouter extends RouteBuilder {
     for (int id : this.getProject().getAccountIds()) {
 
       CloudAccount account = new CloudAccount(id, getProject());
-      account.setConfiguration();
+      boolean pollReady = account.setConfiguration();
+      if (!pollReady) {
+        System.out.println("\nERROR: Cloud account configuration not valid. Cannot poll this project.");
+        System.exit(1);
+      }
 
       switch (account.getType()) {
 
       case BOX:
         BoxConnector boxconnect = new BoxConnector(account, this.getProducer());
-        from("timer://foo?repeatCount=1").bean(boxconnect, "poll");
+        from("timer://foo?repeatCount=1")
+            .threads(20) // dont wait for polling processing before continuing
+            .bean(boxconnect, "poll");
         break;
 
       case DROPBOX:
         DropBoxConnector dbconnect = new DropBoxConnector(account, this.getProducer());
-        from("timer://foo?repeatCount=1").bean(dbconnect, "poll");
+        from("timer://foo?repeatCount=1")
+            .threads(20) // dont wait for polling processing before continuing
+            .bean(dbconnect, "poll");
         break;
 
       case GOOGLEDRIVE:
         GoogleDriveConnector gdconnect = new GoogleDriveConnector(account, this.getProducer());
-        from("timer://foo?repeatCount=1").bean(gdconnect, "poll");
+        from("timer://foo?repeatCount=1")
+            .threads(20) // dont wait for polling processing before continuing
+            .bean(gdconnect, "poll");
         break;
       }
 
@@ -143,6 +153,8 @@ public class SyncRouter extends RouteBuilder {
      * solr instance to index update
      */
     // TODO: Add Solr address for updates
+    // Example:
+    // https://github.com/Rameshb-umd/camel-solr/blob/feature/LIBWEB-3321/src/main/java/edu/umd/lib/routes/SolrRouter.java
     from("direct:update.solr")
         .routeId("SolrUpdater")
         .log("Updating Solr object.");
@@ -153,6 +165,8 @@ public class SyncRouter extends RouteBuilder {
      * solr instance to delete file from indexing
      */
     // TODO: Add Solr address for deletions
+    // Example:
+    // https://github.com/Rameshb-umd/camel-solr/blob/feature/LIBWEB-3321/src/main/java/edu/umd/lib/routes/SolrRouter.java
     from("direct:delete.solr")
         .routeId("SolrDeleter")
         .log("Deleting Solr object.");

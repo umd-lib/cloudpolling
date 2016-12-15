@@ -104,11 +104,12 @@ public class CloudPollingApp {
 
     int accountID = Integer.parseInt(accountName.split("acct")[1]);
     CloudAccount account = new CloudAccount(accountID, project);
+    account.setConfiguration();
     ProducerTemplate dummy = new DefaultCamelContext().createProducerTemplate();
     BoxConnector box = new BoxConnector(account, dummy);
     try {
       String userID = box.createAppUser();
-      account.updateConfiguration("userID", userID);
+      account.updateConfiguration("appUserID", userID);
       System.out.println("Account configuration file has been updated with app user ID.");
     } catch (IOException e) {
       e.printStackTrace();
@@ -215,7 +216,8 @@ public class CloudPollingApp {
         + "\n add <projectname> <acct_type> : adds a cloud account to a project (types: Box, DropBox, Drive)"
         + "\n poll <projectname> : polls all accounts in a project and syncs account folder with local system"
         + "\n reset <projectname> : resets poll tokens on all accounts associated with given project"
-        + "\n boxappuser <projectname> <acct_name> : creates a box app user for given account - enterpriseID and appUserName must be filled out in account's configuration file";
+        + "\n boxappuser <projectname> <acct_name> : creates a box app user for given account - "
+        + "enterpriseID and appUserName must be filled out in account's configuration file";
 
     CommandSet set = new CommandSet();
     int numArgs = args.length;

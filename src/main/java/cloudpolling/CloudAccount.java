@@ -35,7 +35,6 @@ public class CloudAccount {
     BOX, DROPBOX, GOOGLEDRIVE
   }
 
-  // TODO: add google drive config templates
   public static HashMap<Type, File> TEMPLATES;
   static {
     HashMap<CloudAccount.Type, File> map = new HashMap<CloudAccount.Type, File>();
@@ -45,6 +44,9 @@ public class CloudAccount {
 
     File dropBoxTemplate = new File("src/main/resources/templates/dropbox.properties");
     map.put(CloudAccount.Type.DROPBOX, dropBoxTemplate);
+
+    File googleDriveTemplate = new File("src/main/resources/templates/googledrive.properties");
+    map.put(CloudAccount.Type.GOOGLEDRIVE, googleDriveTemplate);
 
     TEMPLATES = map;
   }
@@ -118,8 +120,9 @@ public class CloudAccount {
    * If it does exist, it will validate the fields and report if further action
    * is needed to configure the account.
    */
-  public void setConfiguration() {
+  public boolean setConfiguration() {
     boolean fileCreated = false;
+    boolean pollReady = false;
 
     try {
       fileCreated = this.getConfigFile().createNewFile();
@@ -134,6 +137,7 @@ public class CloudAccount {
         System.out.println("Configuration file for " + this.getParent().getName() + "/acct" + this.getID()
             + " already exists and has validated.");
         setType();
+        pollReady = true;
 
       } else {
 
@@ -146,6 +150,8 @@ public class CloudAccount {
       System.out.println("New file has been created: " + this.getConfigFile().getAbsolutePath());
       copyTemplateToConfigFile();
     }
+
+    return pollReady;
   }
 
   /**
@@ -161,7 +167,8 @@ public class CloudAccount {
 
       FileOutputStream outStream = new FileOutputStream(this.getConfigFile());
       temp.store(outStream,
-          "Properties for box connection account " + Integer.toString(this.getID()) + " for project "
+          "Properties for " + this.getType().toString() + " connection account " + Integer.toString(this.getID())
+              + " for project "
               + this.getParent().getName());
       outStream.close();
 
@@ -206,37 +213,31 @@ public class CloudAccount {
 
     switch (this.getType()) {
 
-    // TODO: Be more robust with file checking?
-
     case BOX:
       // check if private key file exists
       String privateKeyFilename = config.getProperty("privateKeyFile");
       File privateKeyFile = new File(privateKeyFilename);
       fieldsOK = privateKeyFile.exists();
-
-      for (Object value : config.values()) {
-        if (value.toString() == "FILLHERE") {
-          fieldsOK = false;
-          break;
-        }
-      }
-      break;
-
-    case DROPBOX:
-
-      for (Object value : config.values()) {
-        if (value.toString() == "FILLHERE") {
-          fieldsOK = false;
-          break;
-        }
-      }
-
       break;
 
     case GOOGLEDRIVE:
-      // TODO: add functionality for google drive
+      // check if client secret JSON file exists
+      String clientSecretFileName = config.getProperty("clientSecretFile");
+      File clientSecretFile = new File(clientSecretFileName);
+      fieldsOK = clientSecretFile.exists();
       break;
 
+    default:
+      break;
+
+    }
+
+    // For all account types, check that all properties are filled out
+    for (Object value : config.values()) {
+      if (value.toString().equals("FILLHERE")) {
+        fieldsOK = false;
+        break;
+      }
     }
 
     return fieldsOK;

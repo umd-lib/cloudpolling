@@ -148,7 +148,7 @@ public class PollingProject {
 
     System.out
         .println(
-            "Added new " + accountType.toString() + "account, 'acct" + Integer.toString(newID)
+            "Added new " + accountType.toString() + " account, 'acct" + Integer.toString(newID)
                 + "' to polling project '" + this.getName() + "'.");
   }
 
