@@ -31,3 +31,6 @@ https://docs.google.com/a/umd.edu/document/d/1Gph5Vh9UqrkIzwnVVPQrLiucOEjirqOF59
 
 For more infomation, please contact Tara at taralarrue@gmail.com
 
+## License
+
+See the [LICENSE](LICENSE.md) file for license rights and limitations (Apache 2.0).
