@@ -17,7 +17,7 @@ This application is a prototype developed as a part of a data management and pre
 
 
 **API APPLICATIONS:**  
-Each of the supported cloud storage sites come with their own set of instructions for obtaining an API key and authenticating a connection to a user account. Please see their developers websites. After setting up an API application, use information found on your developer's console and the user's account to configure your cloud account by filling neccessary fields in its .properties file. 
+Each of the supported cloud storage sites come with their own set of instructions for obtaining an API key and authenticating a connection to a user account. Please see their developers websites. After setting up an API application, use information found on your developer's console and the user's account to configure your cloud account by filling the neccessary fields in its .properties file. 
 * Box : https://developer.box.com/
 * DropBox: https://www.dropbox.com/developers
 * GoogleDrive: https://console.developers.google.com/flows/enableapi?apiid=drive&authuser=3
